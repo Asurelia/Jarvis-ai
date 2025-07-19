@@ -1,0 +1,33 @@
+# Core
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+websockets==12.0
+
+# Vision
+pillow==10.2.0
+opencv-python==4.9.0
+pytesseract==0.3.10
+easyocr==1.7.1
+
+# Control
+pyautogui==0.9.54
+keyboard==0.13.5
+pywin32==306; sys_platform == "win32"
+psutil==5.9.8
+
+# AI
+ollama==0.1.7
+chromadb==0.4.22
+sentence-transformers==2.2.2
+
+# Voice
+openai-whisper==20231117
+edge-tts==6.1.10
+speechrecognition==3.10.0
+
+# Utils
+loguru==0.7.2
+pydantic==2.5.0
+numpy==1.26.2
+aiofiles==23.2.1
+asyncio-mqtt==0.16.1

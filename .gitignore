@@ -1,0 +1,110 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs
+logs/
+*.log
+
+# Cache
+cache/
+.cache/
+*.cache
+
+# Screenshots and test files
+test_*.png
+test_*.jpg
+jarvis_screenshot_*.png
+screenshots/
+
+# OCR cache
+ocr_cache.json
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ollama models (optional - models are large)
+# models/
+
+# Configuration files with secrets
+config/secrets.json
+config/api_keys.json
+
+# Memory and database files
+memory/
+*.db
+*.sqlite
+
+# Audio files from voice processing
+*.wav
+*.mp3
+audio_cache/
+
+# UI build files
+ui/dist/
+ui/build/
+node_modules/
+
+# Pytest
+.pytest_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Windows specific
+*.exe
+*.msi
+*.lnk
