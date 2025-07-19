@@ -138,6 +138,7 @@ class JarvisAgent:
         self.security_manager = SecurityManager(self.config)
         self.running = False
         self.event_queue = asyncio.Queue()
+        self.modules = {}  # Dictionnaire des modules JARVIS
         
         logger.info("🤖 JARVIS Agent initialisé")
         if self.config.sandbox_mode:
@@ -152,9 +153,9 @@ class JarvisAgent:
             logger.info("🔧 Enregistrement des modules JARVIS...")
             
             # Vision Module
-            from ..vision.screen_capture import ScreenCapture
-            from ..vision.ocr_engine import OCREngine
-            from ..vision.visual_analysis import VisualAnalyzer
+            from core.vision.screen_capture import ScreenCapture
+            from core.vision.ocr_engine import OCREngine
+            from core.vision.visual_analysis import VisualAnalyzer
             
             vision_modules = {
                 'screen_capture': ScreenCapture(),
@@ -167,9 +168,9 @@ class JarvisAgent:
                 self.modules[name] = module
             
             # Control Module  
-            from ..control.mouse_controller import MouseController
-            from ..control.keyboard_controller import KeyboardController
-            from ..control.app_detector import AppDetector
+            from core.control.mouse_controller import MouseController
+            from core.control.keyboard_controller import KeyboardController
+            from core.control.app_detector import AppDetector
             
             control_modules = {
                 'mouse': MouseController(sandbox_mode=self.config.sandbox_mode),
@@ -182,9 +183,9 @@ class JarvisAgent:
                 self.modules[name] = module
             
             # AI Module
-            from ..ai.ollama_service import OllamaService
-            from ..ai.action_planner import ActionPlanner
-            from ..ai.memory_system import MemorySystem
+            from core.ai.ollama_service import OllamaService
+            from core.ai.action_planner import ActionPlanner
+            from core.ai.memory_system import MemorySystem
             
             ai_modules = {
                 'ollama': OllamaService(),
@@ -201,7 +202,7 @@ class JarvisAgent:
             # Voice Module
             if self.config.voice_enabled:
                 try:
-                    from ..voice.voice_interface import VoiceInterface
+                    from core.voice.voice_interface import VoiceInterface
                     voice_module = VoiceInterface()
                     if await voice_module.initialize():
                         self.modules['voice'] = voice_module

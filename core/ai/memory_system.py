@@ -396,8 +396,10 @@ class MemorySystem:
             
             # Démarrer la maintenance automatique si activée
             if self.maintenance_config["auto_cleanup_enabled"]:
-                await self.schedule_memory_maintenance(self.maintenance_config["cleanup_interval_hours"])
+                # TODO: Implémenter la maintenance automatique
+                # await self.schedule_memory_maintenance(self.maintenance_config["cleanup_interval_hours"])
                 self.stats["maintenance_enabled"] = True
+                logger.info("⚠️ Maintenance automatique temporairement désactivée")
             
             logger.success("✅ Système de mémoire prêt")
             return True

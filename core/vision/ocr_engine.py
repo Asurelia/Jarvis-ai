@@ -372,15 +372,25 @@ class OCREngine:
             # Vérifier Tesseract
             try:
                 pytesseract.get_tesseract_version()
+                self.tesseract_available = True
                 logger.success("✅ Tesseract disponible")
             except Exception as e:
-                logger.error(f"❌ Tesseract non disponible: {e}")
-                raise
+                logger.warning(f"⚠️ Tesseract non disponible: {e}")
+                logger.warning("⚠️ Fonctionnement en mode EasyOCR uniquement")
+                self.tesseract_available = False
             
             # Initialiser EasyOCR
-            await self.easyocr.initialize()
+            try:
+                await self.easyocr.initialize()
+                logger.success("✅ EasyOCR initialisé")
+            except Exception as e:
+                logger.error(f"❌ EasyOCR non disponible: {e}")
+                raise
             
-            logger.success("✅ Moteur OCR complètement initialisé")
+            if self.tesseract_available:
+                logger.success("✅ Moteur OCR complètement initialisé (Tesseract + EasyOCR)")
+            else:
+                logger.warning("⚠️ Moteur OCR partiellement initialisé (EasyOCR uniquement)")
             
         except Exception as e:
             logger.error(f"❌ Erreur initialisation OCR: {e}")
@@ -466,7 +476,7 @@ class OCREngine:
         edge_density = np.mean(cv2.Canny(gray, 50, 150))
         
         # Logique de sélection basée sur les caractéristiques
-        if contrast < 30:
+        if contrast < 30 and self.tesseract_available:
             # Faible contraste - Tesseract avec prétraitement
             logger.debug("🔍 Image faible contraste - utilisation Tesseract avec prétraitement")
             return self.tesseract.extract_text(image)
@@ -476,8 +486,11 @@ class OCREngine:
             try:
                 return self.easyocr.extract_text(image)
             except Exception:
-                return self.tesseract.extract_text(image)
-        elif brightness > 200:
+                if self.tesseract_available:
+                    return self.tesseract.extract_text(image)
+                else:
+                    raise
+        elif brightness > 200 and self.tesseract_available:
             # Image très claire - Tesseract généralement meilleur
             logger.debug("🔍 Image claire - utilisation Tesseract")
             return self.tesseract.extract_text(image)
@@ -487,12 +500,19 @@ class OCREngine:
             try:
                 return self.easyocr.extract_text(image)
             except Exception:
-                logger.warning("🔄 EasyOCR échoué, fallback vers Tesseract")
-                return self.tesseract.extract_text(image)
+                if self.tesseract_available:
+                    logger.warning("🔄 EasyOCR échoué, fallback vers Tesseract")
+                    return self.tesseract.extract_text(image)
+                else:
+                    raise
     
     async def _combine_engines(self, image: Image.Image) -> OCRFullResult:
         """Combine les résultats des deux moteurs"""
         # Exécuter les deux moteurs
+        if not self.tesseract_available:
+            logger.warning("⚠️ Mode combiné non disponible sans Tesseract, utilisation EasyOCR uniquement")
+            return self.easyocr.extract_text(image)
+        
         tesseract_result = self.tesseract.extract_text(image)
         easyocr_result = self.easyocr.extract_text(image)
         

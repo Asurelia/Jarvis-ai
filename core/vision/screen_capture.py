@@ -168,7 +168,7 @@ class ScreenCapture:
                         })
                         return True
                     
-                    win32api.EnumDisplayMonitors(None, None, enum_monitor_callback, None)
+                    win32api.EnumDisplayMonitors(enum_monitor_callback, None)
                     self.monitors = monitors
                     logger.info(f"📺 {len(monitors)} moniteurs détectés")
                     

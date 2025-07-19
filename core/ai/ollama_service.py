@@ -114,7 +114,18 @@ class OllamaService:
         try:
             # Vérifier la disponibilité d'Ollama
             available_models = ollama.list()
-            model_names = [model['name'] for model in available_models['models']]
+            if 'models' in available_models and available_models['models']:
+                model_names = []
+                for model in available_models['models']:
+                    if isinstance(model, dict) and 'name' in model:
+                        model_names.append(model['name'])
+                    elif isinstance(model, str):
+                        model_names.append(model)
+                    else:
+                        logger.warning(f"⚠️ Structure de modèle inattendue: {model}")
+            else:
+                model_names = []
+                logger.warning("⚠️ Aucun modèle Ollama trouvé")
             
             logger.info(f"📚 Modèles Ollama disponibles: {len(model_names)}")
             

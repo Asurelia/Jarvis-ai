@@ -217,36 +217,64 @@ class ActionPlanner:
         
         available_actions = ", ".join([action.value for action in ActionType])
         
-        return f"""Commande utilisateur: {command}{context_str}
+        return f"""INSTRUCTION: Tu es un assistant de planification d'actions pour JARVIS. Tu dois TOUJOURS répondre uniquement avec un JSON valide.
+
+Commande utilisateur: {command}{context_str}
 
 Actions disponibles: {available_actions}
 
 Templates disponibles: {", ".join(self.action_templates.keys())}
 
-Convertis cette commande en séquence d'actions JSON structurée:
+RÉPONDS UNIQUEMENT avec ce JSON (pas de texte avant ou après):
 {{
-  "sequence_name": "nom_descriptif",
-  "description": "description de ce qui sera fait",
+  "sequence_name": "nom_descriptif_de_la_tache",
+  "description": "description_de_ce_qui_sera_fait",
   "actions": [
     {{
-      "type": "action_type",
-      "parameters": {{"param": "valeur"}},
-      "description": "description de l'action"
+      "type": "open_application",
+      "parameters": {{"app_name": "nom_application"}},
+      "description": "description_action"
     }}
   ]
 }}
 
-Sois précis et logique dans l'ordre des actions."""
+EXEMPLES:
+- Pour "ouvre youtube": {{"sequence_name": "Ouvrir YouTube", "description": "Lance YouTube dans le navigateur", "actions": [{{"type": "open_application", "parameters": {{"app_name": "chrome"}}, "description": "Ouvrir Chrome"}}, {{"type": "web_navigation", "parameters": {{"url": "https://youtube.com"}}, "description": "Aller sur YouTube"}}]}}
+
+RÉPONDS SEULEMENT LE JSON:"""
     
     async def _parse_ai_response(self, ai_response: str, original_command: str) -> ActionSequence:
         """Parse la réponse de l'IA en ActionSequence"""
         try:
-            # Extraire le JSON de la réponse
-            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
-            if not json_match:
-                raise ValueError("Aucun JSON trouvé dans la réponse")
+            logger.debug(f"🔍 Réponse brute IA: {ai_response}")
             
-            parsed_data = json.loads(json_match.group())
+            # Nettoyer la réponse
+            clean_response = ai_response.strip()
+            
+            # Extraire le JSON de la réponse (plus robuste)
+            json_patterns = [
+                r'\{.*\}',  # JSON simple
+                r'```json\s*(\{.*\})\s*```',  # JSON dans des blocs code
+                r'```\s*(\{.*\})\s*```',  # JSON dans des blocs code sans "json"
+            ]
+            
+            json_match = None
+            for pattern in json_patterns:
+                json_match = re.search(pattern, clean_response, re.DOTALL)
+                if json_match:
+                    break
+            
+            if not json_match:
+                # Si pas de JSON trouvé, essayer de parser directement
+                if clean_response.startswith('{') and clean_response.endswith('}'):
+                    json_data = clean_response
+                else:
+                    raise ValueError("Aucun JSON trouvé dans la réponse")
+            else:
+                json_data = json_match.group(1) if json_match.lastindex else json_match.group()
+            
+            logger.debug(f"🔍 JSON extrait: {json_data}")
+            parsed_data = json.loads(json_data)
             
             # Construire la séquence d'actions
             actions = []
@@ -281,12 +309,28 @@ Sois précis et logique dans l'ordre des actions."""
     async def _fallback_parse(self, command: str) -> ActionSequence:
         """Parsing de fallback basé sur des règles"""
         actions = []
-        sequence_name = "Commande simple"
+        sequence_name = "Analyse de situation"
         
         command_lower = command.lower()
         
-        # Règles basiques de reconnaissance
-        if "google" in command_lower and "search" in command_lower:
+        logger.info(f"🔄 Utilisation du parsing de fallback pour: {command}")
+        
+        # Règles basiques de reconnaissance améliorées
+        if any(word in command_lower for word in ["youtube", "ouvre youtube", "lance youtube"]):
+            # Ouvrir YouTube
+            actions.append(Action(
+                type=ActionType.OPEN_APPLICATION,
+                parameters={"app_name": "chrome"},
+                description="Ouvrir Chrome"
+            ))
+            actions.append(Action(
+                type=ActionType.WEB_NAVIGATION,
+                parameters={"url": "https://youtube.com"},
+                description="Naviguer vers YouTube"
+            ))
+            sequence_name = "Ouvrir YouTube"
+            
+        elif any(word in command_lower for word in ["google", "recherche"]):
             # Recherche Google
             query = self._extract_search_query(command)
             template = self.action_templates["google_search"]
