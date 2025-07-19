@@ -1,8 +1,12 @@
 /**
  * 🤖 JARVIS Context - Gestion d'état global
- * Context React pour la communication avec JARVIS
+ * Context React pour la communication avec JARVIS via API REST et WebSocket
  */
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+
+// Configuration API
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8000/ws';
 
 // État initial
 const initialState = {
@@ -12,6 +16,14 @@ const initialState = {
     pid: null,
     version: null,
     uptime: 0
+  },
+  
+  // Connexion API
+  api: {
+    connected: false,
+    websocket: null,
+    lastPing: null,
+    reconnectAttempts: 0
   },
   
   // Modules et leurs états
@@ -453,7 +465,250 @@ export function JarvisProvider({ children }) {
     }
   };
   
-  // API Electron
+  // API REST et WebSocket
+  const apiService = {
+    // Configuration
+    baseURL: API_BASE_URL,
+    wsURL: WS_URL,
+    
+    // Méthodes HTTP
+    async request(endpoint, options = {}) {
+      try {
+        const url = `${API_BASE_URL}${endpoint}`;
+        const response = await fetch(url, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+          },
+          ...options
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error(`API request failed: ${endpoint}`, error);
+        throw error;
+      }
+    },
+    
+    // Health check
+    async checkHealth() {
+      try {
+        const response = await this.request('/api/health');
+        return response.status === 'healthy';
+      } catch (error) {
+        return false;
+      }
+    },
+    
+    // Statut système
+    async getSystemStatus() {
+      return await this.request('/api/status');
+    },
+    
+    // Exécuter une commande
+    async executeCommand(command, mode = 'auto') {
+      return await this.request('/api/command', {
+        method: 'POST',
+        body: JSON.stringify({ command, mode })
+      });
+    },
+    
+    // Chat avec l'IA
+    async chatWithAI(message, conversationId = null) {
+      return await this.request('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message, conversation_id: conversationId })
+      });
+    },
+    
+    // Synthèse vocale
+    async speakText(text, voice = null) {
+      return await this.request('/api/voice/speak', {
+        method: 'POST',
+        body: JSON.stringify({ text, voice })
+      });
+    },
+    
+    // Capture d'écran
+    async takeScreenshot() {
+      return await this.request('/api/screenshot');
+    },
+    
+    // Applications en cours
+    async getRunningApps() {
+      return await this.request('/api/apps');
+    },
+    
+    // Conversations mémoire
+    async getConversations() {
+      return await this.request('/api/memory/conversations');
+    }
+  };
+  
+  // WebSocket Management
+  const wsRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  
+  const connectWebSocket = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      return; // Déjà connecté
+    }
+    
+    try {
+      actions.addLog('info', 'Connecting to WebSocket...', 'api');
+      wsRef.current = new WebSocket(WS_URL);
+      
+      wsRef.current.onopen = () => {
+        actions.addLog('success', 'WebSocket connected', 'api');
+        dispatch({ 
+          type: ActionTypes.SET_JARVIS_STATUS, 
+          payload: { status: 'connected' } 
+        });
+        
+        // Reset reconnect attempts
+        dispatch({ 
+          type: ActionTypes.UPDATE_CONFIG, 
+          payload: { reconnectAttempts: 0 } 
+        });
+        
+        // Start ping/pong
+        const pingInterval = setInterval(() => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'ping' }));
+          } else {
+            clearInterval(pingInterval);
+          }
+        }, 30000); // Ping every 30s
+      };
+      
+      wsRef.current.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+      
+      wsRef.current.onclose = () => {
+        actions.addLog('warning', 'WebSocket disconnected', 'api');
+        dispatch({ 
+          type: ActionTypes.SET_JARVIS_STATUS, 
+          payload: { status: 'disconnected' } 
+        });
+        
+        // Attempt reconnect
+        scheduleReconnect();
+      };
+      
+      wsRef.current.onerror = (error) => {
+        actions.addLog('error', `WebSocket error: ${error.message || 'Unknown error'}`, 'api');
+      };
+      
+    } catch (error) {
+      actions.addLog('error', `Failed to connect WebSocket: ${error.message}`, 'api');
+      scheduleReconnect();
+    }
+  };
+  
+  const scheduleReconnect = () => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    
+    const attempts = state.api?.reconnectAttempts || 0;
+    const delay = Math.min(1000 * Math.pow(2, attempts), 30000); // Exponential backoff, max 30s
+    
+    reconnectTimeoutRef.current = setTimeout(() => {
+      dispatch({ 
+        type: ActionTypes.UPDATE_CONFIG, 
+        payload: { reconnectAttempts: attempts + 1 } 
+      });
+      connectWebSocket();
+    }, delay);
+  };
+  
+  const handleWebSocketMessage = (message) => {
+    const { type, data } = message;
+    
+    switch (type) {
+      case 'welcome':
+        actions.addLog('info', data.message, 'jarvis');
+        break;
+        
+      case 'pong':
+        // Update last ping time
+        break;
+        
+      case 'status_update':
+        // Update system status
+        if (data.modules) {
+          const moduleStatus = {};
+          data.modules.forEach(module => {
+            moduleStatus[module.name] = {
+              status: module.status,
+              lastActivity: module.last_update
+            };
+          });
+          actions.updateAllModules(moduleStatus);
+        }
+        
+        if (data.performance) {
+          actions.updateStats({
+            commandsExecuted: data.performance.modules_loaded || 0
+          });
+        }
+        break;
+        
+      case 'command_planned':
+        actions.addLog('info', `Command planned: ${data.name}`, 'jarvis');
+        actions.addNotification('info', 'Command Planned', `${data.actions_count} actions ready`);
+        break;
+        
+      case 'execution_started':
+        actions.addLog('info', `Executing sequence: ${data.sequence_id}`, 'jarvis');
+        break;
+        
+      case 'execution_completed':
+        const status = data.success ? 'success' : 'error';
+        const message = data.success 
+          ? `Executed ${data.actions_executed} actions in ${data.execution_time}s`
+          : `Execution failed: ${data.error}`;
+        actions.addLog(status, message, 'jarvis');
+        
+        if (data.success) {
+          actions.incrementStat('commandsExecuted');
+          actions.addNotification('success', 'Command Executed', message);
+        } else {
+          actions.addNotification('error', 'Execution Failed', data.error);
+        }
+        break;
+        
+      case 'execution_error':
+        actions.addLog('error', `Execution error: ${data.error}`, 'jarvis');
+        actions.addNotification('error', 'Execution Error', data.error);
+        break;
+        
+      case 'chat_response':
+        actions.addLog('info', `AI: ${data.message.substring(0, 100)}...`, 'jarvis');
+        break;
+        
+      case 'screenshot_taken':
+        actions.addLog('success', `Screenshot saved: ${data.filename}`, 'jarvis');
+        actions.incrementStat('screenshotsTaken');
+        actions.addNotification('success', 'Screenshot', 'Screen captured successfully');
+        break;
+        
+      default:
+        console.log('Unknown WebSocket message type:', type, data);
+    }
+  };
+  
+  // API Electron (fallback pour mode desktop)
   const electronAPI = {
     // Vérifications de disponibilité
     isElectron: () => window.electronAPI !== undefined,
@@ -536,18 +791,56 @@ export function JarvisProvider({ children }) {
   useEffect(() => {
     // Initialisation
     const initializeApp = async () => {
-      // Obtenir la version
-      const version = await electronAPI.getAppVersion();
-      actions.setJarvisVersion(version);
+      actions.addLog('info', 'Initializing JARVIS UI...', 'ui');
       
-      // Vérifier le statut de JARVIS
-      const status = await electronAPI.getJarvisStatus();
-      actions.setJarvisStatus(status.running ? 'connected' : 'disconnected', status.pid);
+      // Vérifier si on est en mode Electron ou Web
+      const isElectron = window.electronAPI !== undefined;
+      
+      if (isElectron) {
+        // Mode Electron - utiliser l'API Electron
+        actions.addLog('info', 'Running in Electron mode', 'ui');
+        
+        const version = await electronAPI.getAppVersion();
+        actions.setJarvisVersion(version);
+        
+        const status = await electronAPI.getJarvisStatus();
+        actions.setJarvisStatus(status.running ? 'connected' : 'disconnected', status.pid);
+      } else {
+        // Mode Web - utiliser l'API REST
+        actions.addLog('info', 'Running in Web mode', 'ui');
+        actions.setJarvisVersion('web-1.0.0');
+        
+        // Vérifier la santé de l'API
+        try {
+          const isHealthy = await apiService.checkHealth();
+          if (isHealthy) {
+            actions.addLog('success', 'API server is healthy', 'api');
+            // Connecter le WebSocket
+            connectWebSocket();
+          } else {
+            actions.addLog('error', 'API server is not responding', 'api');
+            actions.setJarvisStatus('error');
+          }
+        } catch (error) {
+          actions.addLog('error', `Failed to connect to API: ${error.message}`, 'api');
+          actions.setJarvisStatus('error');
+        }
+      }
       
       actions.addLog('info', 'JARVIS UI initialized', 'ui');
     };
     
     initializeApp();
+    
+    // Cleanup WebSocket on unmount
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
   }, []);
   
   // Listeners Electron
@@ -645,10 +938,56 @@ export function JarvisProvider({ children }) {
     }
   }, [state.jarvis.status, state.jarvis.uptime]);
   
+  // Polling pour maintenir le statut à jour (mode web seulement)
+  useEffect(() => {
+    if (window.electronAPI) return; // Skip en mode Electron
+    
+    const pollStatus = async () => {
+      try {
+        const status = await apiService.getSystemStatus();
+        
+        // Mettre à jour les modules
+        const moduleStatus = {};
+        status.modules.forEach(module => {
+          moduleStatus[module.name] = {
+            status: module.status,
+            lastActivity: module.last_update
+          };
+        });
+        actions.updateAllModules(moduleStatus);
+        
+        // Mettre à jour les stats
+        if (status.performance) {
+          actions.updateStats({
+            commandsExecuted: status.performance.modules_loaded || 0
+          });
+        }
+        
+        // Mettre à jour l'uptime
+        if (status.uptime) {
+          actions.updateJarvisUptime(Math.floor(status.uptime));
+        }
+        
+      } catch (error) {
+        // Ne pas spammer les logs en cas d'erreur de polling
+        console.debug('Status polling failed:', error);
+      }
+    };
+    
+    // Poll toutes les 5 secondes si pas de WebSocket
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      const interval = setInterval(pollStatus, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [state.jarvis.status]);
+  
   const value = {
     state,
     actions,
-    electronAPI
+    electronAPI,
+    apiService,
+    connectWebSocket,
+    isWebMode: !window.electronAPI
   };
   
   return (

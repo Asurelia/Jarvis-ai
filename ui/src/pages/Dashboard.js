@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 
 import { useJarvis } from '../contexts/JarvisContext';
+import { useJarvisAPI } from '../hooks/useJarvisAPI';
 
 // Composant de carte de statut de module
 function ModuleStatusCard({ title, icon: Icon, status, description, stats, color = 'primary' }) {
@@ -273,7 +274,8 @@ function RecentLogsCard() {
 
 function Dashboard() {
   const theme = useTheme();
-  const { state, actions, electronAPI } = useJarvis();
+  const { state, actions, isWebMode } = useJarvis();
+  const { takeScreenshot, refreshSystemStatus, speakText, loading, isConnected } = useJarvisAPI();
   const [systemInfo, setSystemInfo] = useState(null);
   
   // Charger les informations système
@@ -286,18 +288,35 @@ function Dashboard() {
     });
   }, [state.jarvis.uptime]);
   
+  // Rafraîchir le statut périodiquement
+  useEffect(() => {
+    if (isWebMode && isConnected) {
+      const interval = setInterval(() => {
+        refreshSystemStatus();
+      }, 10000); // Toutes les 10 secondes
+      
+      return () => clearInterval(interval);
+    }
+  }, [isWebMode, isConnected, refreshSystemStatus]);
+  
   // Actions rapides
   const handleQuickAction = async (action) => {
-    switch (action) {
-      case 'screenshot':
-        await electronAPI.executeCommand('screenshot');
-        actions.incrementStat('screenshotsTaken');
-        break;
-      case 'voice_test':
-        await electronAPI.executeCommand('test voice');
-        break;
-      default:
-        console.log('Action non implémentée:', action);
+    try {
+      switch (action) {
+        case 'screenshot':
+          await takeScreenshot();
+          break;
+        case 'voice_test':
+          await speakText('Test de l\'interface vocale JARVIS. Tout fonctionne correctement.');
+          break;
+        case 'refresh_status':
+          await refreshSystemStatus();
+          break;
+        default:
+          console.log('Action non implémentée:', action);
+      }
+    } catch (error) {
+      actions.addNotification('error', 'Erreur', `Action échouée: ${error.message}`);
     }
   };
   
@@ -473,10 +492,37 @@ function Dashboard() {
                     Statut JARVIS
                   </Typography>
                   <Chip
-                    label={state.jarvis.status === 'connected' ? 'Connecté' : 'Déconnecté'}
+                    label={isConnected ? 'Connecté' : 'Déconnecté'}
                     size="small"
-                    color={state.jarvis.status === 'connected' ? 'success' : 'error'}
+                    color={isConnected ? 'success' : 'error'}
                   />
+                </Box>
+                
+                {isWebMode && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Mode
+                    </Typography>
+                    <Chip
+                      label="Web API"
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                    />
+                  </Box>
+                )}
+                
+                {loading && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Statut
+                    </Typography>
+                    <Chip
+                      label="Chargement..."
+                      size="small"
+                      color="warning"
+                    />
+                  </Box>
                 </Box>
                 
                 {state.jarvis.status === 'connected' && (
@@ -513,7 +559,7 @@ function Dashboard() {
                   variant="outlined"
                   startIcon={<ScreenshotIcon />}
                   onClick={() => handleQuickAction('screenshot')}
-                  disabled={state.jarvis.status !== 'connected'}
+                  disabled={!isConnected || loading}
                   size="small"
                 >
                   Capture d'écran
@@ -523,10 +569,20 @@ function Dashboard() {
                   variant="outlined"
                   startIcon={<VoiceIcon />}
                   onClick={() => handleQuickAction('voice_test')}
-                  disabled={state.jarvis.status !== 'connected' || !state.config.voiceMode}
+                  disabled={!isConnected || loading}
                   size="small"
                 >
                   Test vocal
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  startIcon={<PerformanceIcon />}
+                  onClick={() => handleQuickAction('refresh_status')}
+                  disabled={loading}
+                  size="small"
+                >
+                  Actualiser statut
                 </Button>
                 
                 <Button

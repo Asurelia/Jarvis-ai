@@ -356,12 +356,24 @@ class MemorySystem:
         # Service Ollama pour les résumés
         self.ollama_service = None
         
+        # Configuration de maintenance
+        self.maintenance_config = {
+            "auto_cleanup_enabled": True,
+            "cleanup_interval_hours": 24,
+            "max_age_days": 30,
+            "importance_threshold": 0.2,
+            "max_memories_per_category": 10000
+        }
+        
         # Statistiques
         self.stats = {
             "memories_stored": 0,
             "memories_retrieved": 0,
             "conversations_tracked": 0,
-            "preferences_learned": 0
+            "preferences_learned": 0,
+            "cleanup_runs": 0,
+            "last_cleanup": None,
+            "maintenance_enabled": False
         }
         
         logger.info("🧠 Système de mémoire JARVIS initialisé")
@@ -381,6 +393,11 @@ class MemorySystem:
             
             # Charger les préférences utilisateur
             await self._load_user_preferences()
+            
+            # Démarrer la maintenance automatique si activée
+            if self.maintenance_config["auto_cleanup_enabled"]:
+                await self.schedule_memory_maintenance(self.maintenance_config["cleanup_interval_hours"])
+                self.stats["maintenance_enabled"] = True
             
             logger.success("✅ Système de mémoire prêt")
             return True
