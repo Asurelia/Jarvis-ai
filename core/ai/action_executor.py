@@ -559,10 +559,37 @@ class ActionExecutor:
             executable = action.parameters.get("executable")
             
             if app_name or executable:
-                # TODO: Implémenter l'ouverture d'application
-                # Pour l'instant, simuler le succès
-                action.result = {"app_opened": True, "app": app_name or executable}
-                return ExecutionResult.SUCCESS
+                # Implémenter l'ouverture d'application
+                import subprocess
+                import platform
+                
+                try:
+                    if platform.system() == "Windows":
+                        # Windows : utiliser start pour ouvrir des apps par nom
+                        if app_name:
+                            # Essayer d'ouvrir par nom d'application
+                            cmd = f'start "" "{app_name}"'
+                            subprocess.run(cmd, shell=True, check=True)
+                        elif executable:
+                            # Ouvrir un exécutable spécifique
+                            subprocess.Popen([executable])
+                    else:
+                        # Linux/Mac
+                        if executable:
+                            subprocess.Popen([executable])
+                        else:
+                            # Essayer avec xdg-open ou open selon l'OS
+                            opener = "open" if platform.system() == "Darwin" else "xdg-open"
+                            subprocess.Popen([opener, app_name])
+                    
+                    action.result = {"app_opened": True, "app": app_name or executable}
+                    logger.success(f"✅ Application ouverte: {app_name or executable}")
+                    return ExecutionResult.SUCCESS
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erreur ouverture application: {e}")
+                    action.result = {"app_opened": False, "error": str(e)}
+                    return ExecutionResult.FAILED
             else:
                 return ExecutionResult.FAILED
                 

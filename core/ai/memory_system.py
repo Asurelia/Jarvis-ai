@@ -104,26 +104,26 @@ class EmbeddingGenerator:
     def generate_embedding(self, text: str) -> List[float]:
         """Génère un embedding pour un texte"""
         if not self.model:
-            return [0.0] * self.dimension
+            raise RuntimeError("Modèle d'embeddings non disponible. Installez sentence-transformers.")
         
         try:
             embedding = self.model.encode(text, convert_to_tensor=False)
             return embedding.tolist()
         except Exception as e:
             logger.error(f"❌ Erreur génération embedding: {e}")
-            return [0.0] * self.dimension
+            raise RuntimeError(f"Impossible de générer l'embedding: {e}")
     
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """Génère des embeddings pour une liste de textes"""
         if not self.model:
-            return [[0.0] * self.dimension] * len(texts)
+            raise RuntimeError("Modèle d'embeddings non disponible. Installez sentence-transformers.")
         
         try:
             embeddings = self.model.encode(texts, convert_to_tensor=False)
             return embeddings.tolist()
         except Exception as e:
             logger.error(f"❌ Erreur génération embeddings batch: {e}")
-            return [[0.0] * self.dimension] * len(texts)
+            raise RuntimeError(f"Impossible de générer les embeddings: {e}")
 
 class ChromaMemoryStore:
     """Store de mémoire basé sur ChromaDB"""
@@ -353,6 +353,9 @@ class MemorySystem:
         # Cache des mémoires fréquemment accédées
         self.memory_cache = {}
         
+        # Service Ollama pour les résumés
+        self.ollama_service = None
+        
         # Statistiques
         self.stats = {
             "memories_stored": 0,
@@ -385,6 +388,11 @@ class MemorySystem:
         except Exception as e:
             logger.error(f"❌ Erreur initialisation mémoire: {e}")
             return False
+    
+    def set_ollama_service(self, ollama_service):
+        """Configure le service Ollama pour la génération de résumés"""
+        self.ollama_service = ollama_service
+        logger.info("🤖 Service Ollama configuré pour le système de mémoire")
     
     # === Gestion des conversations ===
     
@@ -467,8 +475,29 @@ class MemorySystem:
             content = message["content"]
             conversation_text += f"{role}: {content}\n"
         
-        # Pour l'instant, résumé simple
-        # TODO: Utiliser l'IA pour générer un vrai résumé
+        # Utiliser l'IA pour générer un vrai résumé si disponible
+        if hasattr(self, 'ollama_service') and self.ollama_service:
+            try:
+                prompt = f"""Résume cette conversation en 2-3 phrases concises:
+
+{conversation_text[:1000]}  # Limiter pour éviter des prompts trop longs
+
+Résumé:"""
+                
+                # Utiliser Ollama pour générer le résumé
+                summary = await self.ollama_service.generate_text(
+                    prompt,
+                    model="llama3.2:3b",
+                    temperature=0.3,
+                    max_tokens=100
+                )
+                
+                if summary:
+                    return summary.strip()
+            except Exception as e:
+                logger.warning(f"⚠️ Impossible de générer un résumé IA: {e}")
+        
+        # Fallback : résumé basique
         summary = f"Conversation avec {len(conversation.messages)} messages. "
         
         if conversation.context:

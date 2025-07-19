@@ -258,7 +258,8 @@ class WhisperSTT:
     
     def _save_temp_audio(self, audio_data: bytes) -> Path:
         """Sauvegarde temporaire des données audio"""
-        temp_dir = Path("temp")
+        import tempfile
+        temp_dir = Path(tempfile.gettempdir()) / "jarvis_audio"
         temp_dir.mkdir(exist_ok=True)
         
         temp_path = temp_dir / f"temp_audio_{int(time.time() * 1000)}.wav"

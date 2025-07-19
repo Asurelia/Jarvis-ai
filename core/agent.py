@@ -148,24 +148,77 @@ class JarvisAgent:
         logger.info("🚀 Initialisation de JARVIS...")
         
         try:
-            # TODO: Enregistrer et initialiser les modules
+            # Enregistrer et initialiser les modules
+            logger.info("🔧 Enregistrement des modules JARVIS...")
+            
             # Vision Module
-            # await self.module_manager.register_module('vision', VisionModule)
+            from ..vision.screen_capture import ScreenCapture
+            from ..vision.ocr_engine import OCREngine
+            from ..vision.visual_analysis import VisualAnalyzer
+            
+            vision_modules = {
+                'screen_capture': ScreenCapture(),
+                'ocr_engine': OCREngine(),
+                'visual_analyzer': VisualAnalyzer()
+            }
+            
+            for name, module in vision_modules.items():
+                await module.initialize()
+                self.modules[name] = module
             
             # Control Module  
-            # await self.module_manager.register_module('control', ControlModule, 
-            #                                         sandbox=self.config.sandbox_mode)
+            from ..control.mouse_controller import MouseController
+            from ..control.keyboard_controller import KeyboardController
+            from ..control.app_detector import AppDetector
+            
+            control_modules = {
+                'mouse': MouseController(sandbox_mode=self.config.sandbox_mode),
+                'keyboard': KeyboardController(sandbox_mode=self.config.sandbox_mode),
+                'app_detector': AppDetector()
+            }
+            
+            for name, module in control_modules.items():
+                await module.initialize()
+                self.modules[name] = module
             
             # AI Module
-            # await self.module_manager.register_module('ai', AIModule)
+            from ..ai.ollama_service import OllamaService
+            from ..ai.action_planner import ActionPlanner
+            from ..ai.memory_system import MemorySystem
+            
+            ai_modules = {
+                'ollama': OllamaService(),
+                'memory': MemorySystem(),
+            }
+            
+            for name, module in ai_modules.items():
+                await module.initialize()
+                self.modules[name] = module
+            
+            # Ajouter le planner avec ollama
+            self.modules['planner'] = ActionPlanner(self.modules['ollama'])
             
             # Voice Module
-            # if self.config.voice_enabled:
-            #     await self.module_manager.register_module('voice', VoiceModule)
+            if self.config.voice_enabled:
+                try:
+                    from ..voice.voice_interface import VoiceInterface
+                    voice_module = VoiceInterface()
+                    if await voice_module.initialize():
+                        self.modules['voice'] = voice_module
+                        logger.success("✅ Module vocal initialisé")
+                except Exception as e:
+                    logger.warning(f"⚠️ Module vocal non disponible: {e}")
             
             # Autocomplete Module
-            # if self.config.autocomplete_enabled:
-            #     await self.module_manager.register_module('autocomplete', AutocompleteModule)
+            if self.config.autocomplete_enabled:
+                try:
+                    from ...autocomplete.global_autocomplete import GlobalAutocomplete
+                    autocomplete_module = GlobalAutocomplete()
+                    if await autocomplete_module.initialize():
+                        self.modules['autocomplete'] = autocomplete_module
+                        logger.success("✅ Module autocomplétion initialisé")
+                except Exception as e:
+                    logger.warning(f"⚠️ Module autocomplétion non disponible: {e}")
             
             # Initialiser tous les modules
             await self.module_manager.initialize_all()

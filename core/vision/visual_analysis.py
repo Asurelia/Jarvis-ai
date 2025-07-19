@@ -45,7 +45,7 @@ class UIElementDetector:
     
     def __init__(self):
         self.button_cascade = None
-        self.text_detector = cv2.dnn.readNet  # Placeholder pour un modèle de détection de texte
+        self.text_detector = None  # Détection de texte sera gérée par OCR
         
     def detect_buttons(self, image: np.ndarray) -> List[UIElement]:
         """Détecte les boutons dans l'image"""
@@ -268,9 +268,40 @@ Formatez votre réponse comme une liste structurée."""
         result = await self.analyze_image(image, prompt)
         
         if result.get("success"):
-            # TODO: Parser la réponse pour extraire les éléments structurés
-            # Pour l'instant, retourner la description brute
-            return [{"description": result["description"]}]
+            # Parser la réponse pour extraire les éléments structurés
+            description = result["description"]
+            elements = []
+            
+            # Extraire les éléments mentionnés dans la description
+            lines = description.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.startswith('- ') or line.startswith('• '):
+                    # C'est un élément de liste
+                    element_text = line[2:].strip()
+                    
+                    # Essayer de déterminer le type d'élément
+                    element_type = "element"
+                    if any(word in element_text.lower() for word in ["bouton", "button"]):
+                        element_type = "button"
+                    elif any(word in element_text.lower() for word in ["champ", "field", "input"]):
+                        element_type = "input"
+                    elif any(word in element_text.lower() for word in ["texte", "text", "label"]):
+                        element_type = "text"
+                    elif any(word in element_text.lower() for word in ["menu", "navigation"]):
+                        element_type = "menu"
+                    
+                    elements.append({
+                        "type": element_type,
+                        "description": element_text,
+                        "raw_line": line
+                    })
+            
+            # Si aucun élément trouvé, retourner la description complète
+            if not elements:
+                elements = [{"description": description}]
+            
+            return elements
         
         return []
     

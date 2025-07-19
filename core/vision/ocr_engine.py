@@ -450,14 +450,45 @@ class OCREngine:
             )
     
     async def _auto_select_engine(self, image: Image.Image) -> OCRFullResult:
-        """Sélection automatique du meilleur moteur"""
-        # Pour l'instant, privilégier EasyOCR pour sa robustesse
-        # TODO: Implémenter une logique plus sophistiquée basée sur le type d'image
-        try:
-            return self.easyocr.extract_text(image)
-        except Exception:
-            logger.warning("🔄 EasyOCR échoué, fallback vers Tesseract")
+        """Sélection automatique du meilleur moteur basée sur l'analyse de l'image"""
+        import cv2
+        import numpy as np
+        
+        # Convertir en array numpy pour analyse
+        img_array = np.array(image)
+        
+        # Analyser les caractéristiques de l'image
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY) if len(img_array.shape) == 3 else img_array
+        
+        # Calculer des métriques
+        contrast = np.std(gray)
+        brightness = np.mean(gray)
+        edge_density = np.mean(cv2.Canny(gray, 50, 150))
+        
+        # Logique de sélection basée sur les caractéristiques
+        if contrast < 30:
+            # Faible contraste - Tesseract avec prétraitement
+            logger.debug("🔍 Image faible contraste - utilisation Tesseract avec prétraitement")
             return self.tesseract.extract_text(image)
+        elif edge_density > 20:
+            # Beaucoup de détails/texte - EasyOCR plus robuste
+            logger.debug("🔍 Image complexe - utilisation EasyOCR")
+            try:
+                return self.easyocr.extract_text(image)
+            except Exception:
+                return self.tesseract.extract_text(image)
+        elif brightness > 200:
+            # Image très claire - Tesseract généralement meilleur
+            logger.debug("🔍 Image claire - utilisation Tesseract")
+            return self.tesseract.extract_text(image)
+        else:
+            # Cas par défaut - EasyOCR avec fallback
+            logger.debug("🔍 Cas standard - EasyOCR préféré")
+            try:
+                return self.easyocr.extract_text(image)
+            except Exception:
+                logger.warning("🔄 EasyOCR échoué, fallback vers Tesseract")
+                return self.tesseract.extract_text(image)
     
     async def _combine_engines(self, image: Image.Image) -> OCRFullResult:
         """Combine les résultats des deux moteurs"""
@@ -465,16 +496,57 @@ class OCREngine:
         tesseract_result = self.tesseract.extract_text(image)
         easyocr_result = self.easyocr.extract_text(image)
         
-        # Choisir le meilleur résultat basé sur la confiance
-        if tesseract_result.confidence_avg > easyocr_result.confidence_avg:
-            best_result = tesseract_result
-            logger.debug("🔍 Tesseract sélectionné (meilleure confiance)")
-        else:
-            best_result = easyocr_result
-            logger.debug("🔍 EasyOCR sélectionné (meilleure confiance)")
+        # Fusion sophistiquée des résultats des deux moteurs
+        from difflib import SequenceMatcher
         
-        # TODO: Implémenter une fusion plus sophistiquée des résultats
-        return best_result
+        # Analyser les similarités entre les textes extraits
+        tesseract_text = tesseract_result.text.strip()
+        easyocr_text = easyocr_result.text.strip()
+        
+        similarity = SequenceMatcher(None, tesseract_text, easyocr_text).ratio()
+        
+        # Si les résultats sont très similaires (>80%), fusionner les mots avec les meilleures confidences
+        if similarity > 0.8:
+            logger.debug(f"🔍 Fusion des résultats (similarité: {similarity:.2f})")
+            
+            # Prendre les mots avec la meilleure confiance de chaque moteur
+            fused_words = []
+            tesseract_words = tesseract_result.words
+            easyocr_words = easyocr_result.words
+            
+            # Si même nombre de mots, comparer mot par mot
+            if len(tesseract_words) == len(easyocr_words):
+                for t_word, e_word in zip(tesseract_words, easyocr_words):
+                    if t_word.confidence > e_word.confidence:
+                        fused_words.append(t_word)
+                    else:
+                        fused_words.append(e_word)
+            else:
+                # Sinon, prendre le résultat avec la meilleure confiance globale
+                if tesseract_result.confidence_avg > easyocr_result.confidence_avg:
+                    fused_words = tesseract_words
+                else:
+                    fused_words = easyocr_words
+            
+            # Créer le résultat fusionné
+            fused_text = " ".join([word.text for word in fused_words])
+            fused_confidence = sum([word.confidence for word in fused_words]) / len(fused_words) if fused_words else 0
+            
+            return OCRFullResult(
+                text=fused_text,
+                words=fused_words,
+                confidence_avg=fused_confidence,
+                processing_time=max(tesseract_result.processing_time, easyocr_result.processing_time),
+                image_hash=tesseract_result.image_hash
+            )
+        else:
+            # Résultats trop différents, choisir celui avec la meilleure confiance
+            if tesseract_result.confidence_avg > easyocr_result.confidence_avg:
+                logger.debug(f"🔍 Tesseract sélectionné (confiance: {tesseract_result.confidence_avg:.2f} vs {easyocr_result.confidence_avg:.2f})")
+                return tesseract_result
+            else:
+                logger.debug(f"🔍 EasyOCR sélectionné (confiance: {easyocr_result.confidence_avg:.2f} vs {tesseract_result.confidence_avg:.2f})")
+                return easyocr_result
     
     def get_stats(self) -> Dict[str, Any]:
         """Retourne les statistiques du moteur OCR"""

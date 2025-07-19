@@ -145,15 +145,53 @@ class ScreenCapture:
     async def detect_monitors(self):
         """Détecte les moniteurs disponibles"""
         try:
-            # Pour l'instant, utilise le moniteur principal
-            # TODO: Implémenter la détection multi-moniteurs avec win32api sur Windows
-            screen_size = ImageGrab.grab().size
-            self.monitors = [{
-                'id': 0,
-                'primary': True,
-                'width': screen_size[0],
-                'height': screen_size[1],
-                'x': 0,
+            # Détection multi-moniteurs
+            import platform
+            
+            if platform.system() == "Windows":
+                try:
+                    # Essayer avec win32api si disponible
+                    import win32api
+                    import win32con
+                    
+                    monitors = []
+                    def enum_monitor_callback(hMonitor, hdcMonitor, lprcMonitor, dwData):
+                        info = win32api.GetMonitorInfo(hMonitor)
+                        monitor_area = info['Monitor']
+                        monitors.append({
+                            'id': len(monitors),
+                            'primary': info['Flags'] & win32con.MONITORINFOF_PRIMARY != 0,
+                            'width': monitor_area[2] - monitor_area[0],
+                            'height': monitor_area[3] - monitor_area[1],
+                            'x': monitor_area[0],
+                            'y': monitor_area[1]
+                        })
+                        return True
+                    
+                    win32api.EnumDisplayMonitors(None, None, enum_monitor_callback, None)
+                    self.monitors = monitors
+                    logger.info(f"📺 {len(monitors)} moniteurs détectés")
+                    
+                except ImportError:
+                    # Fallback si win32api non disponible
+                    screen_size = ImageGrab.grab().size
+                    self.monitors = [{
+                        'id': 0,
+                        'primary': True,
+                        'width': screen_size[0],
+                        'height': screen_size[1],
+                        'x': 0,
+                        'y': 0
+                    }]
+            else:
+                # Linux/Mac - utiliser la taille d'écran simple
+                screen_size = ImageGrab.grab().size
+                self.monitors = [{
+                    'id': 0,
+                    'primary': True,
+                    'width': screen_size[0],
+                    'height': screen_size[1],
+                    'x': 0,
                 'y': 0
             }]
             logger.info(f"📺 Moniteur détecté: {screen_size[0]}x{screen_size[1]}")
@@ -227,10 +265,51 @@ class ScreenCapture:
     
     async def capture_window(self, window_title: str) -> Optional[Screenshot]:
         """Capture une fenêtre spécifique par son titre"""
-        # TODO: Implémenter la capture de fenêtre spécifique
-        # Nécessite pywin32 sur Windows pour GetWindowRect
-        logger.warning("Capture de fenêtre spécifique pas encore implémentée")
-        return await self.capture()
+        import platform
+        
+        if platform.system() == "Windows":
+            try:
+                import win32gui
+                import win32ui
+                import win32con
+                
+                def window_enum_handler(hwnd, windows):
+                    if win32gui.IsWindowVisible(hwnd) and win32gui.IsWindowEnabled(hwnd):
+                        window_text = win32gui.GetWindowText(hwnd)
+                        if window_text and window_title.lower() in window_text.lower():
+                            windows.append((hwnd, window_text))
+                
+                windows = []
+                win32gui.EnumWindows(window_enum_handler, windows)
+                
+                if windows:
+                    # Prendre la première fenêtre correspondante
+                    hwnd, title = windows[0]
+                    
+                    # Obtenir les dimensions de la fenêtre
+                    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+                    width = right - left
+                    height = bottom - top
+                    
+                    # Capturer la fenêtre
+                    region = CaptureRegion(
+                        x=left, y=top, width=width, height=height,
+                        name=f"window_{title}"
+                    )
+                    
+                    logger.info(f"📸 Capture de la fenêtre: {title}")
+                    return await self.capture(region)
+                else:
+                    logger.warning(f"❌ Fenêtre '{window_title}' non trouvée")
+                    return None
+                    
+            except ImportError:
+                logger.warning("win32gui non disponible pour la capture de fenêtre")
+                return await self.capture()
+        else:
+            # Linux/Mac - fallback sur capture complète
+            logger.warning("Capture de fenêtre spécifique non supportée sur cet OS")
+            return await self.capture()
     
     async def capture_region_by_name(self, region_name: str) -> Optional[Screenshot]:
         """Capture une région prédéfinie par nom"""

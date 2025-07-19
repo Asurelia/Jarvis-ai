@@ -102,6 +102,9 @@ class JarvisDemo:
             self.modules['memory'] = MemorySystem()
             memory_initialized = await self.modules['memory'].initialize()
             if memory_initialized:
+                # Configurer le service Ollama pour les résumés
+                if 'ollama' in self.modules:
+                    self.modules['memory'].set_ollama_service(self.modules['ollama'])
                 logger.success("✅ Système de mémoire prêt")
             else:
                 logger.warning("⚠️ Système de mémoire non disponible")
@@ -228,7 +231,12 @@ class JarvisDemo:
                 context = event["context"]
                 logger.debug(f"💡 Suggestions: {suggestions} pour '{context.current_text}'")
                 
-                # TODO: Afficher l'overlay UI
+                # Afficher l'overlay UI avec les suggestions
+                if hasattr(self, 'overlay_ui') and self.overlay_ui and suggestions:
+                    try:
+                        self.overlay_ui.show_suggestions(suggestions, context)
+                    except Exception as e:
+                        logger.warning(f"⚠️ Impossible d'afficher overlay: {e}")
                 
             elif action == "suggestion_accepted":
                 suggestion = event["suggestion"]
