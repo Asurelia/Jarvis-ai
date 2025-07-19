@@ -31,3 +31,8 @@ pydantic==2.5.0
 numpy==1.26.2
 aiofiles==23.2.1
 asyncio-mqtt==0.16.1
+
+# Tools System
+aiohttp==3.9.1
+beautifulsoup4==4.12.2
+dataclasses==0.8; python_version < "3.7"

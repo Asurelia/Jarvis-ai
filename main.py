@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 🤖 JARVIS - Agent IA Autonome pour Windows
-Script principal avec toutes les fonctionnalités Phase 2
+Script principal avec toutes les fonctionnalités Phase 4
 
 Usage:
     python main.py                    # Mode interactif complet
@@ -9,6 +9,7 @@ Usage:
     python main.py --test            # Tests des modules
     python main.py --voice           # Mode vocal
     python main.py --autocomplete    # Test autocomplétion
+    python main.py --tools           # Test système d'outils
     python main.py --command "..."   # Commande directe
 """
 import asyncio
@@ -41,6 +42,10 @@ from core.voice.voice_interface import VoiceInterface, VoiceInterfaceConfig
 from autocomplete.global_autocomplete import GlobalAutocomplete, AutocompleteConfig
 from autocomplete.suggestion_engine import SuggestionEngine
 from autocomplete.overlay_ui import OverlayUI
+
+# Imports des modules JARVIS Phase 4 - Tools System
+from tools.tool_manager import tool_manager
+from tools.mcp_server import mcp_server
 
 from config.amd_gpu import configure_amd_gpu, OLLAMA_CONFIG
 
@@ -145,7 +150,31 @@ class JarvisDemo:
             except Exception as e:
                 logger.warning(f"⚠️ Autocomplétion non disponible: {e}")
                 self.modules['autocomplete'] = None
-                self.modules['suggestion_engine'] = None
+            
+            # === MODULES PHASE 4 - TOOLS SYSTEM ===
+            
+            # Gestionnaire d'outils
+            logger.info("🛠️ Initialisation du système d'outils...")
+            try:
+                tools_initialized = await tool_manager.initialize()
+                if tools_initialized:
+                    self.modules['tool_manager'] = tool_manager
+                    logger.success(f"✅ Système d'outils prêt avec {len(tool_manager.registry.tools)} outils")
+                else:
+                    logger.warning("⚠️ Système d'outils non disponible")
+                    self.modules['tool_manager'] = None
+            except Exception as e:
+                logger.error(f"❌ Erreur initialisation outils: {e}")
+                self.modules['tool_manager'] = None
+            
+            # Serveur MCP
+            logger.info("🔌 Initialisation du serveur MCP...")
+            try:
+                self.modules['mcp_server'] = mcp_server
+                logger.success("✅ Serveur MCP prêt")
+            except Exception as e:
+                logger.warning(f"⚠️ Serveur MCP non disponible: {e}")
+                self.modules['mcp_server'] = None
             
             # Agent principal
             logger.info("🎯 Création de l'agent JARVIS...")
@@ -311,6 +340,83 @@ class JarvisDemo:
         except KeyboardInterrupt:
             logger.info("⏹️ Test autocomplétion arrêté")
             await self.modules['autocomplete'].shutdown()
+    
+    async def test_tools_system(self):
+        """Test du système d'outils"""
+        if not self.modules.get('tool_manager'):
+            logger.error("❌ Système d'outils non disponible")
+            return
+        
+        logger.info("🛠️ Test du système d'outils JARVIS")
+        
+        try:
+            # Afficher les statistiques
+            stats = self.modules['tool_manager'].get_stats()
+            logger.info(f"📊 {stats['tools_available']} outils disponibles")
+            
+            # Lister les outils par catégorie
+            for category, count in stats['categories'].items():
+                if count > 0:
+                    logger.info(f"  {category}: {count} outils")
+            
+            # Test d'exécution d'outils
+            logger.info("🧪 Tests d'exécution...")
+            
+            # Test 1: Lecture du fichier courant
+            logger.info("1. Test lecture de fichier...")
+            result = await self.modules['tool_manager'].execute_tool("FileReadTool", {
+                "filepath": __file__,
+                "max_lines": 5
+            })
+            if result.success:
+                logger.success(f"✅ Fichier lu: {len(result.data)} caractères")
+            else:
+                logger.error(f"❌ Erreur: {result.error}")
+            
+            # Test 2: Informations système
+            logger.info("2. Test informations système...")
+            result = await self.modules['tool_manager'].execute_tool("SystemInfoTool", {
+                "include_network": False,
+                "include_disks": False
+            })
+            if result.success:
+                logger.success(f"✅ Infos système récupérées")
+                logger.info(f"  Système: {result.data['platform']['system']}")
+                logger.info(f"  RAM: {result.data['memory']['total_gb']} GB")
+            else:
+                logger.error(f"❌ Erreur: {result.error}")
+            
+            # Test 3: Recherche d'outils
+            logger.info("3. Test recherche d'outils...")
+            matches = self.modules['tool_manager'].search_tools("lire fichier", max_results=3)
+            logger.success(f"✅ {len(matches)} outils trouvés pour 'lire fichier'")
+            for match in matches:
+                tool_info = match["tool"]
+                similarity = match["similarity"]
+                logger.info(f"  - {tool_info['display_name']} (similarité: {similarity:.2f})")
+            
+            # Test 4: Exécution par requête
+            logger.info("4. Test exécution par requête...")
+            result = await self.modules['tool_manager'].execute_tool_by_query(
+                "obtenir les informations du système"
+            )
+            if result.success:
+                logger.success("✅ Outil exécuté via requête naturelle")
+            else:
+                logger.error(f"❌ Erreur: {result.error}")
+            
+            # Statistiques finales
+            final_stats = self.modules['tool_manager'].get_stats()
+            logger.info("📊 Statistiques finales:")
+            logger.info(f"  Outils exécutés: {final_stats['tools_executed']}")
+            logger.info(f"  Succès: {final_stats['executions_successful']}")
+            logger.info(f"  Échecs: {final_stats['executions_failed']}")
+            if final_stats['tools_executed'] > 0:
+                logger.info(f"  Taux de succès: {final_stats['success_rate']:.1%}")
+                logger.info(f"  Temps moyen: {final_stats['avg_execution_time']:.2f}s")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur durant le test des outils: {e}")
     
     async def run_basic_tests(self):
         """Exécute les tests de base de tous les modules"""
@@ -843,6 +949,7 @@ async def main():
     parser.add_argument('--demo', action='store_true', help='Mode démonstration')
     parser.add_argument('--voice', action='store_true', help='Lance le mode vocal')
     parser.add_argument('--autocomplete', action='store_true', help='Test autocomplétion')
+    parser.add_argument('--tools', action='store_true', help='Test système d\'outils')
     parser.add_argument('--test', action='store_true', help='Exécuter les tests')
     parser.add_argument('--command', type=str, help='Exécuter une commande directe')
     parser.add_argument('--config', type=str, help='Fichier de configuration')
@@ -876,6 +983,8 @@ async def main():
         await demo.run_voice_mode()
     elif args.autocomplete:
         await demo.test_autocomplete_system()
+    elif args.tools:
+        await demo.test_tools_system()
     
     elif args.demo:
         await demo.run_demo_sequence()
