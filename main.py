@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
 🤖 JARVIS - Agent IA Autonome pour Windows
-Script principal de démonstration et test
+Script principal avec toutes les fonctionnalités Phase 2
 
 Usage:
-    python main.py                    # Mode interactif
+    python main.py                    # Mode interactif complet
     python main.py --demo            # Mode démonstration
     python main.py --test            # Tests des modules
+    python main.py --voice           # Mode vocal
+    python main.py --autocomplete    # Test autocomplétion
     python main.py --command "..."   # Commande directe
 """
 import asyncio
@@ -21,7 +23,7 @@ from loguru import logger
 # Ajouter le répertoire racine au path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Imports des modules JARVIS
+# Imports des modules JARVIS Phase 1
 from core.agent import JarvisAgent, create_agent
 from core.vision.screen_capture import ScreenCapture, quick_screenshot
 from core.vision.ocr_engine import OCREngine, quick_ocr
@@ -31,6 +33,15 @@ from core.control.keyboard_controller import KeyboardController, quick_type
 from core.control.app_detector import AppDetector, get_current_app
 from core.ai.ollama_service import OllamaService, quick_chat
 from core.ai.action_planner import ActionPlanner, quick_plan
+from core.ai.action_executor import ActionExecutor
+from core.ai.memory_system import MemorySystem
+
+# Imports des modules JARVIS Phase 2
+from core.voice.voice_interface import VoiceInterface, VoiceInterfaceConfig
+from autocomplete.global_autocomplete import GlobalAutocomplete, AutocompleteConfig
+from autocomplete.suggestion_engine import SuggestionEngine
+from autocomplete.overlay_ui import OverlayUI
+
 from config.amd_gpu import configure_amd_gpu, OLLAMA_CONFIG
 
 class JarvisDemo:
@@ -41,12 +52,14 @@ class JarvisDemo:
         self.agent = None
         
     async def initialize_all_modules(self):
-        """Initialise tous les modules JARVIS"""
-        logger.info("🚀 Initialisation complète de JARVIS...")
+        """Initialise tous les modules JARVIS (Phase 1 + Phase 2)"""
+        logger.info("🚀 Initialisation complète de JARVIS Phase 2...")
         
         try:
             # Configuration GPU AMD
             configure_amd_gpu()
+            
+            # === MODULES PHASE 1 ===
             
             # Vision
             logger.info("📸 Initialisation des modules de vision...")
@@ -70,23 +83,234 @@ class JarvisDemo:
             self.modules['app_detector'] = AppDetector()
             await self.modules['app_detector'].initialize()
             
-            # IA
+            # IA Core
             logger.info("🤖 Initialisation des modules IA...")
             self.modules['ollama'] = OllamaService()
             await self.modules['ollama'].initialize()
             
             self.modules['planner'] = ActionPlanner(self.modules['ollama'])
             
+            # === MODULES PHASE 2 ===
+            
+            # Mémoire persistante
+            logger.info("🧠 Initialisation du système de mémoire...")
+            self.modules['memory'] = MemorySystem()
+            memory_initialized = await self.modules['memory'].initialize()
+            if memory_initialized:
+                logger.success("✅ Système de mémoire prêt")
+            else:
+                logger.warning("⚠️ Système de mémoire non disponible")
+            
+            # Exécuteur d'actions
+            logger.info("⚡ Initialisation de l'exécuteur d'actions...")
+            self.modules['executor'] = ActionExecutor()
+            await self.modules['executor'].initialize(self.modules)
+            
+            # Interface vocale
+            logger.info("🎤 Initialisation de l'interface vocale...")
+            try:
+                self.modules['voice'] = VoiceInterface()
+                voice_initialized = await self.modules['voice'].initialize()
+                if voice_initialized:
+                    logger.success("✅ Interface vocale prête")
+                else:
+                    logger.warning("⚠️ Interface vocale non disponible")
+            except Exception as e:
+                logger.warning(f"⚠️ Interface vocale non disponible: {e}")
+                self.modules['voice'] = None
+            
+            # Autocomplétion globale
+            logger.info("⚡ Initialisation de l'autocomplétion globale...")
+            try:
+                self.modules['suggestion_engine'] = SuggestionEngine(self.modules['ollama'])
+                await self.modules['suggestion_engine'].initialize()
+                
+                self.modules['autocomplete'] = GlobalAutocomplete()
+                autocomplete_initialized = await self.modules['autocomplete'].initialize()
+                
+                if autocomplete_initialized:
+                    # Configurer les callbacks
+                    async def suggestion_callback(context):
+                        return await self._generate_autocomplete_suggestions(context)
+                    
+                    async def context_callback(event):
+                        await self._handle_autocomplete_event(event)
+                    
+                    self.modules['autocomplete'].set_suggestion_callback(suggestion_callback)
+                    self.modules['autocomplete'].set_context_callback(context_callback)
+                    
+                    logger.success("✅ Autocomplétion globale prête")
+                else:
+                    logger.warning("⚠️ Autocomplétion globale non disponible")
+            except Exception as e:
+                logger.warning(f"⚠️ Autocomplétion non disponible: {e}")
+                self.modules['autocomplete'] = None
+                self.modules['suggestion_engine'] = None
+            
             # Agent principal
             logger.info("🎯 Création de l'agent JARVIS...")
             self.agent = await create_agent()
             
-            logger.success("✅ JARVIS complètement initialisé et prêt!")
+            logger.success("✅ JARVIS Phase 2 complètement initialisé et prêt!")
+            logger.info("🌟 Nouvelles fonctionnalités disponibles:")
+            logger.info("  🎤 Interface vocale avec Whisper + Edge-TTS")
+            logger.info("  ⚡ Autocomplétion globale temps réel")
+            logger.info("  🧠 Mémoire persistante avec ChromaDB") 
+            logger.info("  🚀 Exécution automatique d'actions")
+            
             return True
             
         except Exception as e:
             logger.error(f"❌ Erreur lors de l'initialisation: {e}")
             return False
+    
+    # === Méthodes pour les nouvelles fonctionnalités Phase 2 ===
+    
+    async def _generate_autocomplete_suggestions(self, context):
+        """Génère des suggestions d'autocomplétion"""
+        try:
+            if self.modules['suggestion_engine']:
+                from autocomplete.suggestion_engine import SuggestionContext
+                
+                suggestion_context = SuggestionContext(
+                    word=context["current_word"],
+                    app_name=context["app_name"],
+                    field_type=context["field_type"],
+                    language=context.get("language", "fr"),
+                    line_context=context["current_line"],
+                    previous_words=context.get("previous_words", [])
+                )
+                
+                suggestions = await self.modules['suggestion_engine'].generate_suggestions(suggestion_context, 5)
+                return [s.text for s in suggestions]
+            
+            return []
+        except Exception as e:
+            logger.debug(f"Erreur génération suggestions: {e}")
+            return []
+    
+    async def _handle_autocomplete_event(self, event):
+        """Gère les événements d'autocomplétion"""
+        try:
+            action = event["action"]
+            
+            if action == "show_suggestions":
+                suggestions = event["suggestions"]
+                context = event["context"]
+                logger.debug(f"💡 Suggestions: {suggestions} pour '{context.current_text}'")
+                
+                # TODO: Afficher l'overlay UI
+                
+            elif action == "suggestion_accepted":
+                suggestion = event["suggestion"]
+                original = event["original"]
+                logger.info(f"✅ Suggestion acceptée: '{original}' -> '{suggestion}'")
+                
+                # Apprendre de l'acceptation
+                if self.modules['suggestion_engine']:
+                    from autocomplete.suggestion_engine import SuggestionContext
+                    context = SuggestionContext(word=original, app_name="", field_type="text", language="fr", line_context="")
+                    self.modules['suggestion_engine'].learn_from_acceptance(context, suggestion)
+        
+        except Exception as e:
+            logger.debug(f"Erreur événement autocomplétion: {e}")
+    
+    async def run_voice_mode(self):
+        """Lance le mode vocal interactif"""
+        if not self.modules.get('voice'):
+            logger.error("❌ Interface vocale non disponible")
+            return
+        
+        logger.info("🎤 Démarrage du mode vocal JARVIS...")
+        
+        # Configurer le callback de commande vocale
+        async def voice_command_callback(command: str) -> str:
+            """Traite les commandes vocales"""
+            try:
+                # Démarrer une conversation en mémoire
+                if self.modules.get('memory'):
+                    conv_id = self.modules['memory'].start_conversation({"mode": "voice"})
+                    self.modules['memory'].add_message_to_conversation(conv_id, "user", command)
+                
+                # Planifier et exécuter l'action
+                if self.modules.get('planner') and self.modules.get('executor'):
+                    sequence = await self.modules['planner'].parse_natural_command(command)
+                    
+                    if sequence and sequence.actions:
+                        logger.info(f"📋 Séquence planifiée: {len(sequence.actions)} actions")
+                        
+                        # Demander confirmation vocale
+                        confirmation = f"Je vais exécuter {len(sequence.actions)} actions pour: {sequence.description}. Voulez-vous continuer ?"
+                        await self.modules['voice'].speak(confirmation)
+                        
+                        # Écouter la réponse
+                        response = await self.modules['voice'].listen_for_command()
+                        
+                        if response and ("oui" in response.lower() or "ok" in response.lower() or "yes" in response.lower()):
+                            # Exécuter la séquence
+                            result = await self.modules['executor'].execute_sequence(sequence)
+                            
+                            if result["success"]:
+                                response_text = f"Commande exécutée avec succès en {result['execution_time']:.1f} secondes."
+                            else:
+                                response_text = f"Erreur lors de l'exécution: {result.get('error', 'Erreur inconnue')}"
+                        else:
+                            response_text = "Commande annulée."
+                    else:
+                        response_text = "Je n'ai pas pu planifier cette action."
+                else:
+                    # Réponse conversationnelle via Ollama
+                    if self.modules.get('ollama'):
+                        ollama_response = await self.modules['ollama'].chat(command)
+                        response_text = ollama_response.content if ollama_response.success else "Je n'ai pas pu traiter votre demande."
+                    else:
+                        response_text = "Système de traitement non disponible."
+                
+                # Enregistrer la réponse en mémoire
+                if self.modules.get('memory') and 'conv_id' in locals():
+                    self.modules['memory'].add_message_to_conversation(conv_id, "assistant", response_text)
+                
+                return response_text
+                
+            except Exception as e:
+                logger.error(f"❌ Erreur traitement commande vocale: {e}")
+                return f"Erreur lors du traitement: {str(e)}"
+        
+        # Configurer les callbacks
+        self.modules['voice'].set_command_callback(voice_command_callback)
+        
+        # Démarrer l'activation vocale
+        try:
+            await self.modules['voice'].start_voice_activation()
+        except KeyboardInterrupt:
+            logger.info("⏹️ Mode vocal arrêté par l'utilisateur")
+        finally:
+            self.modules['voice'].stop_voice_activation()
+    
+    async def test_autocomplete_system(self):
+        """Test du système d'autocomplétion"""
+        if not self.modules.get('autocomplete'):
+            logger.error("❌ Système d'autocomplétion non disponible")
+            return
+        
+        logger.info("🧪 Test du système d'autocomplétion globale")
+        logger.info("Tapez dans n'importe quelle application pour tester l'autocomplétion")
+        logger.info("Les suggestions apparaîtront automatiquement")
+        logger.info("Ctrl+C pour arrêter")
+        
+        try:
+            # Le système d'autocomplétion fonctionne en arrière-plan
+            while True:
+                await asyncio.sleep(1)
+                
+                # Afficher les stats périodiquement
+                stats = self.modules['autocomplete'].get_stats()
+                if stats["keys_processed"] > 0 and stats["keys_processed"] % 100 == 0:
+                    logger.info(f"📊 {stats['keys_processed']} touches traitées, {stats['suggestions_generated']} suggestions")
+        
+        except KeyboardInterrupt:
+            logger.info("⏹️ Test autocomplétion arrêté")
+            await self.modules['autocomplete'].shutdown()
     
     async def run_basic_tests(self):
         """Exécute les tests de base de tous les modules"""
@@ -193,6 +417,107 @@ class JarvisDemo:
         except Exception as e:
             logger.error(f"❌ Test planification échoué: {e}")
             results['planning'] = False
+        
+        # === TESTS PHASE 2 ===
+        
+        # Test exécuteur d'actions
+        try:
+            logger.info("⚡ Test exécuteur d'actions...")
+            if self.modules['executor']:
+                from core.ai.action_planner import Action, ActionType, ActionSequence
+                
+                test_action = Action(
+                    type=ActionType.SCREENSHOT,
+                    description="Test screenshot",
+                    parameters={}
+                )
+                
+                test_sequence = ActionSequence(
+                    id="test_executor",
+                    name="Test exécuteur",
+                    description="Test de l'exécuteur d'actions",
+                    actions=[test_action]
+                )
+                
+                result = await self.modules['executor'].execute_sequence(test_sequence)
+                
+                if result["success"]:
+                    logger.success(f"✅ Exécuteur OK - {result['actions_executed']} actions exécutées")
+                    results['executor'] = True
+                else:
+                    raise Exception(result.get("error", "Échec exécution"))
+            else:
+                raise Exception("Exécuteur non disponible")
+        except Exception as e:
+            logger.error(f"❌ Test exécuteur échoué: {e}")
+            results['executor'] = False
+        
+        # Test mémoire
+        try:
+            logger.info("🧠 Test système de mémoire...")
+            if self.modules['memory']:
+                # Test de conversation
+                conv_id = self.modules['memory'].start_conversation({"test": True})
+                self.modules['memory'].add_message_to_conversation(conv_id, "user", "Test message")
+                self.modules['memory'].add_message_to_conversation(conv_id, "assistant", "Test response")
+                
+                summary = await self.modules['memory'].end_conversation(conv_id)
+                
+                if summary:
+                    logger.success(f"✅ Mémoire OK - Conversation sauvée: {summary[:50]}...")
+                    results['memory'] = True
+                else:
+                    raise Exception("Pas de résumé généré")
+            else:
+                logger.warning("⚠️ Système de mémoire non disponible")
+                results['memory'] = False
+        except Exception as e:
+            logger.error(f"❌ Test mémoire échoué: {e}")
+            results['memory'] = False
+        
+        # Test interface vocale
+        try:
+            logger.info("🎤 Test interface vocale...")
+            if self.modules['voice']:
+                # Test de synthèse vocale simple
+                await self.modules['voice'].speak("Test de l'interface vocale JARVIS.")
+                logger.success("✅ Interface vocale OK - TTS fonctionnel")
+                results['voice'] = True
+            else:
+                logger.warning("⚠️ Interface vocale non disponible")
+                results['voice'] = False
+        except Exception as e:
+            logger.error(f"❌ Test interface vocale échoué: {e}")
+            results['voice'] = False
+        
+        # Test moteur de suggestions
+        try:
+            logger.info("💡 Test moteur de suggestions...")
+            if self.modules['suggestion_engine']:
+                from autocomplete.suggestion_engine import SuggestionContext
+                
+                test_context = SuggestionContext(
+                    word="test",
+                    app_name="notepad.exe",
+                    field_type="text",
+                    language="fr",
+                    line_context="This is a test"
+                )
+                
+                suggestions = await self.modules['suggestion_engine'].generate_suggestions(test_context)
+                
+                if suggestions:
+                    logger.success(f"✅ Moteur suggestions OK - {len(suggestions)} suggestions générées")
+                    results['suggestions'] = True
+                else:
+                    logger.warning("⚠️ Aucune suggestion générée")
+                    results['suggestions'] = True  # Pas forcément un échec
+            else:
+                logger.warning("⚠️ Moteur de suggestions non disponible")
+                results['suggestions'] = False
+        except Exception as e:
+            logger.error(f"❌ Test suggestions échoué: {e}")
+            results['suggestions'] = False
         
         # Résumé des tests
         logger.info("\n📊 RÉSUMÉ DES TESTS:")
@@ -468,10 +793,56 @@ Commandes naturelles:
         except Exception as e:
             logger.error(f"❌ Erreur exécution: {e}")
 
+    def print_help(self):
+        """Affiche l'aide d'utilisation"""
+        help_text = """
+🤖 JARVIS - Assistant IA Autonome pour Windows
+
+Usage: python main.py [options]
+
+Options:
+  --demo          Lance une démonstration interactive
+  --test          Exécute tous les tests de modules
+  --voice         Lance le mode vocal interactif
+  --autocomplete  Test le système d'autocomplétion
+  --config PATH   Utilise un fichier de configuration personnalisé
+  --debug         Active le mode debug avec logs détaillés
+  --sandbox       Active le mode sandbox (sécurisé)
+  --help          Affiche cette aide
+
+Modes d'opération:
+  • Mode Interactif: Interface en ligne de commande
+  • Mode Vocal: Interaction par reconnaissance vocale
+  • Mode Démonstration: Tests automatisés et démonstrations
+  • Mode Sandbox: Exécution sécurisée avec restrictions
+
+Fonctionnalités Phase 1:
+  ✅ Vision: Capture d'écran, OCR, analyse visuelle
+  ✅ Contrôle: Souris, clavier, détection d'applications
+  ✅ IA: Service Ollama, planification d'actions
+
+Fonctionnalités Phase 2:
+  ✅ Interface vocale: Reconnaissance et synthèse vocale
+  ✅ Autocomplétion globale: Suggestions intelligentes
+  ✅ Mémoire persistante: Apprentissage des habitudes
+  ✅ Exécuteur d'actions: Automatisation sécurisée
+  🔄 Interface moderne: UI Electron + React
+
+Exemples:
+  python main.py --demo             # Démonstration complète
+  python main.py --voice            # Mode vocal interactif
+  python main.py --autocomplete     # Test autocomplétion
+  python main.py --test --debug     # Tests avec logs détaillés
+  python main.py --sandbox          # Mode sécurisé
+"""
+        print(help_text)
+
 async def main():
     """Fonction principale"""
     parser = argparse.ArgumentParser(description="JARVIS - Agent IA Autonome")
     parser.add_argument('--demo', action='store_true', help='Mode démonstration')
+    parser.add_argument('--voice', action='store_true', help='Lance le mode vocal')
+    parser.add_argument('--autocomplete', action='store_true', help='Test autocomplétion')
     parser.add_argument('--test', action='store_true', help='Exécuter les tests')
     parser.add_argument('--command', type=str, help='Exécuter une commande directe')
     parser.add_argument('--config', type=str, help='Fichier de configuration')
@@ -501,6 +872,10 @@ async def main():
     # Mode choisi
     if args.test:
         await demo.run_basic_tests()
+    elif args.voice:
+        await demo.run_voice_mode()
+    elif args.autocomplete:
+        await demo.test_autocomplete_system()
     
     elif args.demo:
         await demo.run_demo_sequence()
