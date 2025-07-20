@@ -1,0 +1,142 @@
+# 🔧 Integration Pod - JARVIS 2025  
+# Pod Intégration indépendant : MCP + Autocomplete + IDE + Web Interface
+
+networks:
+  integration_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+
+volumes:
+  autocomplete_cache:
+  mcp_cache:
+  frontend_dist:
+
+services:
+  # 🌐 Frontend - Interface web React
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.prod
+    container_name: integration_pod_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_BRAIN_API=http://localhost:8080
+      - REACT_APP_WEBSOCKET_URL=ws://localhost:8081
+      - REACT_APP_TTS_URL=http://localhost:5002
+      - REACT_APP_STT_URL=http://localhost:5003
+      - REACT_APP_SYSTEM_CONTROL_URL=http://localhost:5004
+      - REACT_APP_TERMINAL_URL=http://localhost:5005
+      - REACT_APP_MCP_URL=http://localhost:5006
+      - REACT_APP_VOICE_BRIDGE_URL=http://localhost:3001
+    volumes:
+      - frontend_dist:/usr/share/nginx/html
+    networks:
+      integration_network:
+        ipv4_address: 172.24.0.10
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Communication avec tous les pods
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 🔧 MCP Gateway - Passerelle pour IDE
+  mcp-gateway:
+    build:
+      context: ./services/mcp-gateway
+      dockerfile: Dockerfile
+    container_name: integration_pod_mcp
+    ports:
+      - "5006:5006"
+    environment:
+      - PYTHONPATH=/app
+      - AI_POD_URL=http://host.docker.internal:8080
+      - AUDIO_POD_TTS_URL=http://host.docker.internal:5002
+      - AUDIO_POD_STT_URL=http://host.docker.internal:5003
+      - CONTROL_POD_SYSTEM_URL=http://host.docker.internal:5004
+      - CONTROL_POD_TERMINAL_URL=http://host.docker.internal:5005
+      - VOICE_BRIDGE_URL=http://host.docker.internal:3001
+    volumes:
+      - mcp_cache:/app/cache
+    networks:
+      integration_network:
+        ipv4_address: 172.24.0.20
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Communication inter-pods
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 🧠 Autocomplete Service - Autocomplétion globale
+  autocomplete-service:
+    build:
+      context: ./services/autocomplete-service
+      dockerfile: Dockerfile
+    container_name: integration_pod_autocomplete
+    ports:
+      - "5007:5007"
+    environment:
+      - LEARNING_ENABLED=true
+      - CONTEXT_HISTORY_SIZE=1000
+      - SUGGESTION_LIMIT=10
+      - AI_POD_URL=http://host.docker.internal:8080
+      - MCP_GATEWAY_URL=http://mcp-gateway:5006
+    volumes:
+      - autocomplete_cache:/app/cache
+    networks:
+      integration_network:
+        ipv4_address: 172.24.0.30
+    depends_on:
+      - mcp-gateway
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Communication inter-pods
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 🌉 Integration Router - Routeur de services
+  integration-router:
+    build:
+      context: ./services/integration-router
+      dockerfile: Dockerfile
+    container_name: integration_pod_router
+    ports:
+      - "5022:5022"
+    environment:
+      - FRONTEND_URL=http://frontend:3000
+      - MCP_GATEWAY_URL=http://mcp-gateway:5006
+      - AUTOCOMPLETE_URL=http://autocomplete-service:5007
+      - AI_POD_URL=http://host.docker.internal:8080
+      - AUDIO_POD_URL=http://host.docker.internal:5002
+      - CONTROL_POD_URL=http://host.docker.internal:5004
+      - VOICE_BRIDGE_URL=http://host.docker.internal:3001
+    networks:
+      integration_network:
+        ipv4_address: 172.24.0.40
+    depends_on:
+      - frontend
+      - mcp-gateway
+      - autocomplete-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5022/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Communication avec tous les services
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

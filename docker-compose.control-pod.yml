@@ -1,0 +1,104 @@
+# 🖥️ Control Pod - JARVIS 2025
+# Pod Contrôle indépendant : System Control + Terminal + Actions
+
+networks:
+  control_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
+
+volumes:
+  control_cache:
+  terminal_sessions:
+
+services:
+  # 🖥️ System Control Service - Contrôle système sécurisé
+  system-control:
+    build:
+      context: ./services/system-control
+      dockerfile: Dockerfile
+    container_name: control_pod_system
+    ports:
+      - "5004:5004"
+    environment:
+      - SANDBOX_MODE=true
+      - MAX_ACTIONS_PER_MINUTE=60
+      - DISPLAY=:99
+      - VOICE_BRIDGE_URL=http://host.docker.internal:3001
+    volumes:
+      - ./logs:/app/logs
+      - control_cache:/app/cache
+    networks:
+      control_network:
+        ipv4_address: 172.23.0.10
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Privilèges pour contrôle système
+    privileged: false
+    cap_add:
+      - SYS_PTRACE
+    # Communication avec host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 💻 Terminal Service - Sessions terminal intelligentes
+  terminal-service:
+    build:
+      context: ./services/terminal-service
+      dockerfile: Dockerfile
+    container_name: control_pod_terminal
+    ports:
+      - "5005:5005"
+    environment:
+      - MAX_TERMINAL_SESSIONS=10
+      - SESSION_TIMEOUT_MINUTES=30
+      - AI_POD_URL=http://host.docker.internal:8080
+    volumes:
+      - ./logs:/app/logs
+      - terminal_sessions:/app/sessions
+    networks:
+      control_network:
+        ipv4_address: 172.23.0.20
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Communication avec host et autres pods
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 🤖 Action Executor - Exécuteur d'actions avancées
+  action-executor:
+    build:
+      context: ./services/action-executor
+      dockerfile: Dockerfile
+    container_name: control_pod_executor
+    ports:
+      - "5021:5021"
+    environment:
+      - SYSTEM_CONTROL_URL=http://system-control:5004
+      - TERMINAL_SERVICE_URL=http://terminal-service:5005
+      - AI_POD_URL=http://host.docker.internal:8080
+      - VOICE_BRIDGE_URL=http://host.docker.internal:3001
+    networks:
+      control_network:
+        ipv4_address: 172.23.0.30
+    depends_on:
+      - system-control
+      - terminal-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5021/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Communication inter-pods
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

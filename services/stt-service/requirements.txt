@@ -1,0 +1,25 @@
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Whisper and audio processing
+openai-whisper==20231117
+numpy==1.24.3
+torch==2.1.1
+torchaudio==2.1.1
+soundfile==0.12.1
+librosa==0.10.1
+
+# WebSocket support
+websockets==12.0
+python-socketio==5.10.0
+
+# Utilities
+loguru==0.7.2
+python-dotenv==1.0.0
+aiofiles==23.2.1
+
+# Audio format support
+ffmpeg-python==0.2.0
+pydub==0.25.1

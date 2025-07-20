@@ -1,0 +1,297 @@
+# 🤖 JARVIS v2.0 - Architecture Microservices Docker
+# Infrastructure moderne pour performance x3-x4
+
+networks:
+  jarvis_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  brain_data:
+  memory_data:
+  ollama_data:
+  audio_cache:
+
+services:
+  # 🧠 Brain API - Cerveau central M.A.MM
+  brain-api:
+    build:
+      context: ./services/brain-api
+      dockerfile: Dockerfile
+    container_name: jarvis_brain
+    ports:
+      - "8080:8080"
+      - "8081:8081"  # WebSocket
+    environment:
+      - NODE_ENV=production
+      - BRAIN_DEBUG=true
+      - REDIS_URL=redis://redis:6379
+      - MEMORY_DB_URL=postgresql://jarvis:jarvis123@memory-db:5432/jarvis_memory
+      - OLLAMA_URL=http://ollama:11434
+    volumes:
+      - brain_data:/app/data
+      - ./logs:/app/logs
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.10
+    depends_on:
+      - redis
+      - memory-db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🗣️ TTS Service - Coqui.ai Streaming
+  tts-service:
+    build:
+      context: ./services/tts-service
+      dockerfile: Dockerfile
+    container_name: jarvis_tts
+    ports:
+      - "5002:5002"
+    environment:
+      - TTS_MODEL=tts_models/multilingual/multi-dataset/xtts_v2
+      - STREAMING_ENABLED=true
+      - CHUNK_SIZE=1024
+      - ANTI_HALLUCINATION=true
+    volumes:
+      - audio_cache:/app/cache
+      - ./services/tts-service/models:/app/models
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.20
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🎤 STT Service - Transcription temps réel
+  stt-service:
+    build:
+      context: ./services/stt-service  
+      dockerfile: Dockerfile
+    container_name: jarvis_stt
+    ports:
+      - "5003:5003"
+    environment:
+      - STT_MODEL=small
+      - REALTIME_PROCESSING=true
+      - VAD_ENABLED=true
+      - CHUNK_DURATION=20ms
+    volumes:
+      - audio_cache:/app/cache
+      - ./services/stt-service/models:/app/models
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.30
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🤖 Ollama LLM Local
+  ollama:
+    image: ollama/ollama:latest
+    container_name: jarvis_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_MODELS=/root/.ollama/models
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.40
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+
+  # 🧮 Redis Cache & Session
+  redis:
+    image: redis:7-alpine
+    container_name: jarvis_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ./services/redis/data:/data
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.50
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🗄️ Memory Database - PostgreSQL + pgvector
+  memory-db:
+    image: pgvector/pgvector:pg16
+    container_name: jarvis_memory_db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=jarvis_memory
+      - POSTGRES_USER=jarvis
+      - POSTGRES_PASSWORD=jarvis123
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - memory_data:/var/lib/postgresql/data
+      - ./services/memory-db/init:/docker-entrypoint-initdb.d
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.60
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis -d jarvis_memory"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🖥️ System Control Service - Contrôle clavier/souris sécurisé
+  system-control:
+    build:
+      context: ./services/system-control
+      dockerfile: Dockerfile
+    container_name: jarvis_system_control
+    ports:
+      - "5004:5004"
+    environment:
+      - SANDBOX_MODE=true
+      - MAX_ACTIONS_PER_MINUTE=60
+      - DISPLAY=:99
+    volumes:
+      - ./logs:/app/logs
+      - ./services/system-control/cache:/app/cache
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.80
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Privilèges requis pour contrôle système (utiliser avec précaution)
+    privileged: false
+    cap_add:
+      - SYS_PTRACE
+
+  # 💻 Terminal Service - Sessions terminal intelligentes
+  terminal-service:
+    build:
+      context: ./services/terminal-service
+      dockerfile: Dockerfile
+    container_name: jarvis_terminal
+    ports:
+      - "5005:5005"
+    environment:
+      - MAX_TERMINAL_SESSIONS=10
+      - SESSION_TIMEOUT_MINUTES=30
+    volumes:
+      - ./logs:/app/logs
+      - ./services/terminal-service/cache:/app/cache
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.90
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🔧 MCP Gateway - Model Context Protocol pour IDE
+  mcp-gateway:
+    build:
+      context: ./services/mcp-gateway
+      dockerfile: Dockerfile
+    container_name: jarvis_mcp_gateway
+    ports:
+      - "5006:5006"
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.100
+    depends_on:
+      - brain-api
+      - system-control
+      - terminal-service
+      - tts-service
+      - stt-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🧠 Global Autocomplete Service - Autocomplétion intelligente
+  autocomplete-service:
+    build:
+      context: ./services/autocomplete-service
+      dockerfile: Dockerfile
+    container_name: jarvis_autocomplete
+    ports:
+      - "5007:5007"
+    environment:
+      - LEARNING_ENABLED=true
+      - CONTEXT_HISTORY_SIZE=1000
+      - SUGGESTION_LIMIT=10
+    volumes:
+      - ./services/autocomplete-service/cache:/app/cache
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.110
+    depends_on:
+      - brain-api
+      - mcp-gateway
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🌐 Frontend WebRTC - Interface moderne React
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.prod
+    container_name: jarvis_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_BRAIN_API=http://brain-api:8080
+      - REACT_APP_WEBSOCKET_URL=ws://brain-api:8081
+      - REACT_APP_TTS_URL=http://tts-service:5002
+      - REACT_APP_STT_URL=http://stt-service:5003
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.70
+    depends_on:
+      - brain-api
+      - tts-service
+      - stt-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+

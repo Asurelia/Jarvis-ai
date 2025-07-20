@@ -1,0 +1,115 @@
+# 🗣️ Audio Pod - JARVIS 2025
+# Pod Audio indépendant : TTS + STT Processing (sans microphone/speakers)
+
+networks:
+  audio_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+volumes:
+  audio_cache:
+  tts_models:
+  stt_models:
+
+services:
+  # 🗣️ TTS Service - Synthèse vocale avancée
+  tts-service:
+    build:
+      context: ./services/tts-service
+      dockerfile: Dockerfile
+    container_name: audio_pod_tts
+    ports:
+      - "5002:5002"
+    environment:
+      - TTS_MODEL=tts_models/multilingual/multi-dataset/xtts_v2
+      - STREAMING_ENABLED=true
+      - CHUNK_SIZE=1024
+      - ANTI_HALLUCINATION=true
+      - GPU_ENABLED=false
+    volumes:
+      - audio_cache:/app/cache
+      - tts_models:/app/models
+    networks:
+      audio_network:
+        ipv4_address: 172.22.0.10
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Optimisation CPU pour audio
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+  # 🎤 STT Service - Reconnaissance vocale Whisper
+  stt-service:
+    build:
+      context: ./services/stt-service
+      dockerfile: Dockerfile
+    container_name: audio_pod_stt
+    ports:
+      - "5003:5003"
+    environment:
+      - STT_MODEL=base
+      - REALTIME_PROCESSING=true
+      - VAD_ENABLED=true
+      - CHUNK_DURATION=20ms
+      - GPU_ENABLED=false
+    volumes:
+      - audio_cache:/app/cache
+      - stt_models:/app/models
+    networks:
+      audio_network:
+        ipv4_address: 172.22.0.20
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Optimisation pour Whisper
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 6G
+        reservations:
+          cpus: '1.0'
+          memory: 3G
+
+  # 🎵 Audio Router - Routeur audio intelligent
+  audio-router:
+    build:
+      context: ./services/audio-router
+      dockerfile: Dockerfile
+    container_name: audio_pod_router
+    ports:
+      - "5020:5020"
+    environment:
+      - TTS_SERVICE_URL=http://tts-service:5002
+      - STT_SERVICE_URL=http://stt-service:5003
+      - VOICE_BRIDGE_URL=http://host.docker.internal:3001
+    networks:
+      audio_network:
+        ipv4_address: 172.22.0.30
+    depends_on:
+      - tts-service
+      - stt-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5020/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Communication avec host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

@@ -417,10 +417,8 @@ class JarvisAgent:
                 except asyncio.TimeoutError:
                     pass
                 
-                # TODO: Tâches périodiques
-                # - Analyser l'écran si nécessaire
-                # - Vérifier les notifications
-                # - Nettoyer la mémoire
+                # Tâches périodiques
+                await self._periodic_tasks()
                 
                 await asyncio.sleep(0.1)  # Éviter la surcharge CPU
                 
@@ -433,11 +431,69 @@ class JarvisAgent:
         event_type = event.get('type')
         logger.debug(f"Événement reçu: {event_type}")
         
-        # TODO: Implémenter la gestion des différents types d'événements
-        # - voice_command
-        # - screen_change
-        # - user_input
-        # - system_notification
+        # Gestion des événements selon leur type
+        if event_type == 'voice_command':
+            await self._handle_voice_command(event)
+        elif event_type == 'screen_change':
+            await self._handle_screen_change(event)
+        elif event_type == 'user_input':
+            await self._handle_user_input(event)
+        elif event_type == 'system_notification':
+            await self._handle_system_notification(event)
+        else:
+            logger.warning(f"Type d'événement non reconnu: {event_type}")
+    
+    async def _handle_voice_command(self, event: Dict[str, Any]):
+        """Traiter une commande vocale"""
+        command = event.get('command', '')
+        if command:
+            await self.process_command(command, mode="conversation")
+    
+    async def _handle_screen_change(self, event: Dict[str, Any]):
+        """Traiter un changement d'écran"""
+        # Analyser le nouvel état de l'écran si nécessaire
+        pass
+    
+    async def _handle_user_input(self, event: Dict[str, Any]):
+        """Traiter une entrée utilisateur"""
+        input_data = event.get('data', {})
+        # Traiter selon le type d'entrée
+        pass
+    
+    async def _handle_system_notification(self, event: Dict[str, Any]):
+        """Traiter une notification système"""
+        notification = event.get('notification', {})
+        # Logger ou traiter la notification
+        pass
+    
+    async def _periodic_tasks(self):
+        """Exécuter les tâches périodiques"""
+        current_time = asyncio.get_event_loop().time()
+        
+        # Nettoyage mémoire toutes les 10 minutes
+        if not hasattr(self, '_last_cleanup') or current_time - self._last_cleanup > 600:
+            if 'memory' in self.modules:
+                try:
+                    await self.modules['memory'].cleanup_old_data()
+                    self._last_cleanup = current_time
+                except Exception as e:
+                    logger.warning(f"Erreur lors du nettoyage mémoire: {e}")
+        
+        # Vérification périodique de l'état des modules
+        if not hasattr(self, '_last_health_check') or current_time - self._last_health_check > 300:
+            await self._check_modules_health()
+            self._last_health_check = current_time
+    
+    async def _check_modules_health(self):
+        """Vérifier l'état de santé des modules"""
+        for name, module in self.modules.items():
+            try:
+                if hasattr(module, 'health_check'):
+                    health = await module.health_check()
+                    if not health:
+                        logger.warning(f"Module {name} en mauvais état")
+            except Exception as e:
+                logger.warning(f"Erreur lors de la vérification de {name}: {e}")
     
     async def start(self):
         """Démarrer l'agent"""

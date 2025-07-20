@@ -17,6 +17,7 @@ import ChatWindow from './components/ChatWindow';
 import ChatButton from './components/ChatButton';
 
 // Page components
+import MainChat from './pages/MainChat';
 import Dashboard from './pages/Dashboard';
 import VisionControl from './pages/VisionControl';
 import VoiceInterface from './pages/VoiceInterface';
@@ -60,15 +61,19 @@ function App() {
   // Vérifier si on est dans Electron
   const isElectron = window.electronAPI !== undefined;
   
+  // Vérifier si on est sur la page de chat principal (fullscreen)
+  const isMainChatRoute = window.location.pathname === '/' || window.location.pathname === '/chat';
+  
   // Layout responsive
   const layoutConfig = {
-    sidebarWidth: state.ui.sidebarOpen ? sidebarWidth : 0,
-    topBarHeight,
+    sidebarWidth: (state.ui.sidebarOpen && !isMainChatRoute) ? sidebarWidth : 0,
+    topBarHeight: isMainChatRoute ? 0 : topBarHeight,
     isMobile,
     isTablet,
     isDesktop,
-    contentPadding: isMobile ? 16 : 24,
-    showSidebar: !isMobile && state.ui.sidebarOpen
+    contentPadding: isMainChatRoute ? 0 : (isMobile ? 16 : 24),
+    showSidebar: !isMobile && state.ui.sidebarOpen && !isMainChatRoute,
+    showTopBar: !isMainChatRoute
   };
   
   // Style du container principal
@@ -95,28 +100,31 @@ function App() {
   // Style du contenu principal
   const mainContentStyle = {
     flex: 1,
-    overflow: 'auto',
+    overflow: isMainChatRoute ? 'hidden' : 'auto',
     padding: `${layoutConfig.contentPadding}px`,
-    paddingTop: `${topBarHeight + layoutConfig.contentPadding}px`,
-    background: `linear-gradient(135deg, 
-      ${theme.palette.background.default} 0%, 
-      ${theme.palette.background.paper} 100%)`,
+    paddingTop: `${layoutConfig.topBarHeight + layoutConfig.contentPadding}px`,
+    background: isMainChatRoute ? 'transparent' : 
+      `linear-gradient(135deg, 
+        ${theme.palette.background.default} 0%, 
+        ${theme.palette.background.paper} 100%)`,
     position: 'relative',
     
-    // Scrollbar personnalisée
-    '&::-webkit-scrollbar': {
-      width: '8px'
-    },
-    '&::-webkit-scrollbar-track': {
-      background: 'rgba(255, 255, 255, 0.05)'
-    },
-    '&::-webkit-scrollbar-thumb': {
-      background: 'rgba(255, 255, 255, 0.2)',
-      borderRadius: '4px'
-    },
-    '&::-webkit-scrollbar-thumb:hover': {
-      background: 'rgba(255, 255, 255, 0.3)'
-    }
+    // Scrollbar personnalisée (seulement si pas MainChat)
+    ...(isMainChatRoute ? {} : {
+      '&::-webkit-scrollbar': {
+        width: '8px'
+      },
+      '&::-webkit-scrollbar-track': {
+        background: 'rgba(255, 255, 255, 0.05)'
+      },
+      '&::-webkit-scrollbar-thumb': {
+        background: 'rgba(255, 255, 255, 0.2)',
+        borderRadius: '4px'
+      },
+      '&::-webkit-scrollbar-thumb:hover': {
+        background: 'rgba(255, 255, 255, 0.3)'
+      }
+    })
   };
   
   return (
@@ -131,24 +139,27 @@ function App() {
       
       {/* Zone de contenu principale */}
       <Box sx={contentAreaStyle}>
-        {/* Barre supérieure */}
-        <TopBar 
-          height={topBarHeight}
-          showMenuButton={isMobile}
-          isElectron={isElectron}
-          onChatToggle={() => setIsChatOpen(!isChatOpen)}
-          isChatOpen={isChatOpen}
-        />
+        {/* Barre supérieure (masquée sur MainChat) */}
+        {layoutConfig.showTopBar && (
+          <TopBar 
+            height={topBarHeight}
+            showMenuButton={isMobile}
+            isElectron={isElectron}
+            onChatToggle={() => setIsChatOpen(!isChatOpen)}
+            isChatOpen={isChatOpen}
+          />
+        )}
         
         {/* Contenu principal avec routage */}
         <Box sx={mainContentStyle}>
           <Routes>
-            {/* Page d'accueil - Dashboard */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            {/* Page d'accueil - Chat Principal avec Sphère 3D */}
+            <Route path="/" element={<MainChat />} />
+            <Route path="/chat" element={<MainChat />} />
             
             {/* Modules JARVIS */}
-            <Route path="/chat" element={<Chat />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/legacy-chat" element={<Chat />} />
             <Route path="/vision" element={<VisionControl />} />
             <Route path="/voice" element={<VoiceInterface />} />
             <Route path="/autocomplete" element={<AutocompleteManager />} />
@@ -160,7 +171,7 @@ function App() {
             <Route path="/settings" element={<Settings />} />
             
             {/* Route par défaut */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Box>
       </Box>

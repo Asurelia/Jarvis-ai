@@ -1,0 +1,191 @@
+{
+  "name": "jarvis-assistant",
+  "displayName": "JARVIS AI Assistant",
+  "description": "Assistant IA intelligent intégré avec JARVIS 2025",
+  "version": "2.0.0",
+  "publisher": "jarvis-ai",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "AI",
+    "Productivity"
+  ],
+  "keywords": [
+    "ai",
+    "assistant",
+    "jarvis",
+    "autocomplete",
+    "chat",
+    "productivity"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "jarvis.chat",
+        "title": "Chat with JARVIS",
+        "category": "JARVIS"
+      },
+      {
+        "command": "jarvis.explain",
+        "title": "Explain Code",
+        "category": "JARVIS"
+      },
+      {
+        "command": "jarvis.refactor",
+        "title": "Refactor Code",
+        "category": "JARVIS"
+      },
+      {
+        "command": "jarvis.generateTests",
+        "title": "Generate Tests",
+        "category": "JARVIS"
+      },
+      {
+        "command": "jarvis.optimizeCode",
+        "title": "Optimize Code",
+        "category": "JARVIS"
+      },
+      {
+        "command": "jarvis.voiceCommand",
+        "title": "Voice Command",
+        "category": "JARVIS"
+      },
+      {
+        "command": "jarvis.startListening",
+        "title": "Start Voice Listening",
+        "category": "JARVIS"
+      },
+      {
+        "command": "jarvis.stopListening", 
+        "title": "Stop Voice Listening",
+        "category": "JARVIS"
+      },
+      {
+        "command": "jarvis.openTerminal",
+        "title": "Open JARVIS Terminal",
+        "category": "JARVIS"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "jarvis.chat",
+        "key": "ctrl+shift+j",
+        "mac": "cmd+shift+j"
+      },
+      {
+        "command": "jarvis.voiceCommand",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v"
+      },
+      {
+        "command": "jarvis.explain",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "jarvis.explain",
+          "when": "editorTextFocus",
+          "group": "jarvis@1"
+        },
+        {
+          "command": "jarvis.refactor",
+          "when": "editorHasSelection",
+          "group": "jarvis@2"
+        },
+        {
+          "command": "jarvis.optimizeCode",
+          "when": "editorHasSelection",
+          "group": "jarvis@3"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "jarvis.generateTests",
+          "when": "resourceExtname =~ /\\.(js|ts|py|java|cpp|cs)$/",
+          "group": "jarvis@1"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "JARVIS Configuration",
+      "properties": {
+        "jarvis.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:5006",
+          "description": "JARVIS MCP Gateway URL"
+        },
+        "jarvis.autoComplete.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered autocompletion"
+        },
+        "jarvis.voice.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable voice commands"
+        },
+        "jarvis.voice.hotword": {
+          "type": "string",
+          "default": "jarvis",
+          "description": "Voice activation hotword"
+        },
+        "jarvis.terminal.integration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable terminal integration"
+        },
+        "jarvis.chat.showPanel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show chat panel by default"
+        }
+      }
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "jarvisChat",
+          "name": "JARVIS Chat",
+          "when": "jarvis.chatEnabled"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jarvis",
+          "title": "JARVIS AI",
+          "icon": "$(robot)"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/parser": "^6.x",
+    "eslint": "^8.x",
+    "typescript": "^5.x"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "ws": "^8.14.0",
+    "uuid": "^9.0.0"
+  }
+}

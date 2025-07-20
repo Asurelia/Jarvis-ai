@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(tesseract:*)",
+      "Bash(choco install:*)",
+      "Bash(venvScripts:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(./deploy-and-test.sh:*)",
+      "Bash(bash:*)",
+      "Bash(curl:*)",
+      "Bash(docker-compose:*)",
+      "Bash(timeout 10 docker-compose logs brain-api --tail=15)"
+    ],
+    "deny": []
+  }
+}

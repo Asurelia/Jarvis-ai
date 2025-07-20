@@ -26,18 +26,20 @@
     "@mui/material": "^5.14.20",
     "@mui/x-charts": "^6.18.2",
     "@mui/x-data-grid": "^6.18.2",
+    "@types/three": "^0.178.1",
+    "axios": "^1.6.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1",
     "react-scripts": "5.0.1",
-    "socket.io-client": "^4.7.4",
     "recharts": "^2.8.0",
-    "axios": "^1.6.2"
+    "socket.io-client": "^4.7.4",
+    "three": "^0.178.0"
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
     "electron": "^27.1.3",
     "electron-builder": "^24.8.1",
-    "concurrently": "^8.2.2",
     "wait-on": "^7.2.0"
   },
   "eslintConfig": {
