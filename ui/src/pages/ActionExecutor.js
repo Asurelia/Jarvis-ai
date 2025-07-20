@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 
 import { useJarvis } from '../contexts/JarvisContext';
+import ActionExecutorComponent from '../components/ActionExecutor';
 
 function ActionExecutor() {
   const { state } = useJarvis();
@@ -62,6 +63,11 @@ function ActionExecutor() {
               </Box>
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* Exécuteur d'actions */}
+        <Grid item xs={12}>
+          <ActionExecutorComponent />
         </Grid>
       </Grid>
     </Box>

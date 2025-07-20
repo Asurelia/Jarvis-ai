@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Microphone - JARVIS</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #1976d2;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #333;
+            border-bottom: 2px solid #1976d2;
+            padding-bottom: 10px;
+        }
+        
+        .step {
+            background: #f8f9fa;
+            border-left: 4px solid #1976d2;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .success {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .button {
+            display: inline-block;
+            background: #1976d2;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+        }
+        
+        .button:hover {
+            background: #1565c0;
+        }
+        
+        .test-section {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: #e3f2fd;
+            border-radius: 10px;
+        }
+        
+        ul {
+            padding-left: 20px;
+        }
+        
+        li {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Configuration Microphone JARVIS</h1>
+        
+        <div class="success">
+            <strong>Bienvenue !</strong> Ce guide vous aide à configurer votre microphone pour utiliser les fonctionnalités vocales de JARVIS.
+        </div>
+
+        <h2>1. Vérification du Microphone Windows</h2>
+        <div class="step">
+            <strong>Étape 1.1 :</strong> Vérifiez que votre microphone fonctionne dans Windows
+            <ul>
+                <li>Clic droit sur l'icône son dans la barre des tâches</li>
+                <li>Sélectionnez "Ouvrir les paramètres de son"</li>
+                <li>Dans "Entrée", vérifiez que votre microphone est sélectionné</li>
+                <li>Parlez et vérifiez que la barre de niveau bouge</li>
+                <li>Cliquez sur "Tester votre microphone" pour un test complet</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <strong>Étape 1.2 :</strong> Autorisations de confidentialité Windows
+            <ul>
+                <li>Ouvrez <code>Paramètres Windows → Confidentialité et sécurité → Microphone</code></li>
+                <li>Activez "Accès au microphone pour cet appareil"</li>
+                <li>Activez "Autoriser les applications à accéder à votre microphone"</li>
+                <li>Activez "Autoriser les applications de bureau à accéder à votre microphone"</li>
+                <li>Vérifiez que votre navigateur (Chrome, Edge, Firefox) est autorisé</li>
+            </ul>
+        </div>
+
+        <h2>2. Configuration du Navigateur</h2>
+        <div class="step">
+            <strong>Pour Chrome/Edge :</strong>
+            <ul>
+                <li>Cliquez sur l'icône cadenas ou microphone dans la barre d'adresse</li>
+                <li>Sélectionnez "Autoriser" pour le microphone</li>
+                <li>Ou allez dans <code>Paramètres → Confidentialité et sécurité → Paramètres des sites → Microphone</code></li>
+                <li>Ajoutez <code>http://localhost:3000</code> à la liste des sites autorisés</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <strong>Pour Firefox :</strong>
+            <ul>
+                <li>Cliquez sur l'icône microphone dans la barre d'adresse</li>
+                <li>Sélectionnez "Autoriser" et cochez "Se souvenir de cette décision"</li>
+                <li>Ou allez dans <code>about:preferences#privacy → Permissions → Microphone</code></li>
+            </ul>
+        </div>
+
+        <h2>3. Test du Microphone JARVIS</h2>
+        <div class="test-section">
+            <h3>🧪 Test Automatique</h3>
+            <p>Cliquez sur le bouton ci-dessous pour tester votre microphone :</p>
+            <button id="testMic" class="button">Tester le Microphone</button>
+            <div id="testResult" style="margin-top: 15px;"></div>
+            <div id="audioLevel" style="margin-top: 10px;"></div>
+        </div>
+
+        <h2>4. Résolution des Problèmes Courants</h2>
+        
+        <div class="error">
+            <strong>❌ "Autorisation microphone refusée"</strong>
+            <ul>
+                <li>Rechargez la page (F5) et cliquez sur "Autoriser" quand demandé</li>
+                <li>Vérifiez les paramètres de confidentialité Windows (étape 1.2)</li>
+                <li>Redémarrez votre navigateur</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ "Aucun microphone trouvé"</strong>
+            <ul>
+                <li>Vérifiez que votre microphone est connecté et allumé</li>
+                <li>Redémarrez Windows si nécessaire</li>
+                <li>Vérifiez dans le Gestionnaire de périphériques</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ "Microphone utilisé par une autre application"</strong>
+            <ul>
+                <li>Fermez Skype, Teams, Discord, ou autres applications vocales</li>
+                <li>Vérifiez les onglets de navigateur utilisant le microphone</li>
+                <li>Redémarrez le navigateur si nécessaire</li>
+            </ul>
+        </div>
+
+        <h2>5. Retour à JARVIS</h2>
+        <div class="success">
+            <p>Une fois votre microphone configuré :</p>
+            <ul>
+                <li>Retournez à l'interface JARVIS</li>
+                <li>Cliquez sur l'icône microphone dans la barre supérieure</li>
+                <li>Ou allez sur la page "Interface Vocale" dans le menu</li>
+                <li>Testez l'enregistrement vocal</li>
+            </ul>
+            <a href="/" class="button">Retour à JARVIS</a>
+            <a href="/voice" class="button">Interface Vocale</a>
+        </div>
+
+        <h2>6. Informations Techniques</h2>
+        <div class="step">
+            <p><strong>Navigateurs supportés :</strong> Chrome 47+, Firefox 36+, Edge 79+, Safari 11+</p>
+            <p><strong>Formats audio :</strong> WebM/Opus, WAV PCM</p>
+            <p><strong>Fréquence d'échantillonnage :</strong> 16 kHz recommandé</p>
+            <p><strong>Contexte sécurisé :</strong> HTTPS ou localhost requis</p>
+        </div>
+
+        <div id="browserInfo" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+            <strong>Informations de votre navigateur :</strong>
+            <div id="userAgent"></div>
+            <div id="mediaDevicesSupport"></div>
+            <div id="httpsStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        // Test du microphone
+        document.getElementById('testMic').addEventListener('click', async function() {
+            const button = this;
+            const result = document.getElementById('testResult');
+            const levelDiv = document.getElementById('audioLevel');
+            
+            button.textContent = 'Test en cours...';
+            button.disabled = true;
+            result.innerHTML = '';
+            levelDiv.innerHTML = '';
+            
+            try {
+                // Vérifier le support
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('API MediaDevices non supportée');
+                }
+                
+                // Demander l'accès
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { 
+                        echoCancellation: true,
+                        noiseSuppression: true 
+                    } 
+                });
+                
+                result.innerHTML = '<div style="color: green;">✅ Microphone autorisé avec succès!</div>';
+                
+                // Analyser le niveau audio
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = audioContext.createAnalyser();
+                const microphone = audioContext.createMediaStreamSource(stream);
+                
+                analyser.fftSize = 256;
+                microphone.connect(analyser);
+                
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                levelDiv.innerHTML = '<div>Niveau audio: <span id="level">0</span>% - Parlez dans le microphone!</div>';
+                
+                let testDuration = 5000; // 5 secondes
+                const startTime = Date.now();
+                
+                function updateLevel() {
+                    if (Date.now() - startTime < testDuration) {
+                        analyser.getByteFrequencyData(dataArray);
+                        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                        const level = Math.round((average / 255) * 100);
+                        document.getElementById('level').textContent = level;
+                        requestAnimationFrame(updateLevel);
+                    } else {
+                        // Arrêter le test
+                        stream.getTracks().forEach(track => track.stop());
+                        levelDiv.innerHTML += '<div style="color: blue;">Test terminé. Microphone configuré correctement!</div>';
+                        button.textContent = 'Tester à Nouveau';
+                        button.disabled = false;
+                    }
+                }
+                
+                updateLevel();
+                
+            } catch (error) {
+                let errorMsg = 'Erreur: ' + error.message;
+                let helpMsg = '';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMsg = '❌ Autorisation refusée';
+                    helpMsg = 'Cliquez sur "Autoriser" dans votre navigateur ou suivez les étapes ci-dessus.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMsg = '❌ Aucun microphone trouvé';
+                    helpMsg = 'Vérifiez qu\'un microphone est connecté dans Windows.';
+                }
+                
+                result.innerHTML = `<div style="color: red;">${errorMsg}</div>`;
+                if (helpMsg) {
+                    result.innerHTML += `<div style="color: orange; margin-top: 5px;">${helpMsg}</div>`;
+                }
+                
+                button.textContent = 'Réessayer';
+                button.disabled = false;
+            }
+        });
+        
+        // Informations du navigateur
+        document.addEventListener('DOMContentLoaded', function() {
+            const userAgent = document.getElementById('userAgent');
+            const mediaSupport = document.getElementById('mediaDevicesSupport');
+            const httpsStatus = document.getElementById('httpsStatus');
+            
+            userAgent.textContent = `Navigateur: ${navigator.userAgent}`;
+            
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                mediaSupport.innerHTML = '<span style="color: green;">✅ API MediaDevices supportée</span>';
+            } else {
+                mediaSupport.innerHTML = '<span style="color: red;">❌ API MediaDevices NON supportée</span>';
+            }
+            
+            if (location.protocol === 'https:' || location.hostname === 'localhost') {
+                httpsStatus.innerHTML = '<span style="color: green;">✅ Contexte sécurisé (HTTPS/localhost)</span>';
+            } else {
+                httpsStatus.innerHTML = '<span style="color: orange;">⚠️ Contexte non sécurisé - peut limiter l\'accès microphone</span>';
+            }
+        });
+    </script>
+</body>
+</html> 

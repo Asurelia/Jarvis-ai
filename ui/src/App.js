@@ -13,6 +13,8 @@ import { useJarvis } from './contexts/JarvisContext';
 import Sidebar from './components/layout/Sidebar';
 import TopBar from './components/layout/TopBar';
 import NotificationSystem from './components/layout/NotificationSystem';
+import ChatWindow from './components/ChatWindow';
+import ChatButton from './components/ChatButton';
 
 // Page components
 import Dashboard from './pages/Dashboard';
@@ -23,6 +25,7 @@ import MemoryExplorer from './pages/MemoryExplorer';
 import ActionExecutor from './pages/ActionExecutor';
 import SystemLogs from './pages/SystemLogs';
 import Settings from './pages/Settings';
+import Chat from './pages/Chat';
 
 // Hook pour la responsivité
 function useResponsive() {
@@ -52,6 +55,7 @@ function App() {
   // État local pour l'interface
   const [sidebarWidth] = useState(280);
   const [topBarHeight] = useState(64);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
   // Vérifier si on est dans Electron
   const isElectron = window.electronAPI !== undefined;
@@ -132,6 +136,8 @@ function App() {
           height={topBarHeight}
           showMenuButton={isMobile}
           isElectron={isElectron}
+          onChatToggle={() => setIsChatOpen(!isChatOpen)}
+          isChatOpen={isChatOpen}
         />
         
         {/* Contenu principal avec routage */}
@@ -142,6 +148,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             
             {/* Modules JARVIS */}
+            <Route path="/chat" element={<Chat />} />
             <Route path="/vision" element={<VisionControl />} />
             <Route path="/voice" element={<VoiceInterface />} />
             <Route path="/autocomplete" element={<AutocompleteManager />} />
@@ -160,6 +167,22 @@ function App() {
       
       {/* Système de notifications */}
       <NotificationSystem />
+      
+      {/* Fenêtre de chat JARVIS */}
+      <ChatWindow 
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        height={isMobile ? window.innerHeight - 100 : 600}
+        width={isMobile ? window.innerWidth - 40 : 400}
+      />
+      
+      {/* Bouton de chat flottant */}
+      <ChatButton
+        isOpen={isChatOpen}
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        bottom={20}
+        right={20}
+      />
       
       {/* Overlay de chargement global */}
       {state.ui.loading && (

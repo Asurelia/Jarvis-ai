@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 
 import { useJarvis } from '../contexts/JarvisContext';
+import MemoryViewer from '../components/MemoryViewer';
 
 function MemoryExplorer() {
   const { state } = useJarvis();
@@ -62,6 +63,11 @@ function MemoryExplorer() {
               </Box>
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* Visualiseur de mémoire */}
+        <Grid item xs={12}>
+          <MemoryViewer />
         </Grid>
       </Grid>
     </Box>

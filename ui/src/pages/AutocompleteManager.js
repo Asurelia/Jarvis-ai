@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 
 import { useJarvis } from '../contexts/JarvisContext';
+import AutocompleteManagerComponent from '../components/AutocompleteManager';
 
 function AutocompleteManager() {
   const { state, actions } = useJarvis();
@@ -75,6 +76,11 @@ function AutocompleteManager() {
               </Box>
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* Gestionnaire d'autocomplétion */}
+        <Grid item xs={12}>
+          <AutocompleteManagerComponent />
         </Grid>
       </Grid>
     </Box>

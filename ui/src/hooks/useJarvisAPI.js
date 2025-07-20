@@ -236,12 +236,7 @@ export function useVoiceCommands() {
   }, [speakText, executeCommand]);
 
   const announceStatus = useCallback(async () => {
-    const { state } = useJarvis();
-    const activeModules = Object.entries(state.modules)
-      .filter(([_, module]) => module.status === 'active')
-      .length;
-    
-    const statusText = `JARVIS is ${state.jarvis.status}. ${activeModules} modules are active.`;
+    const statusText = `JARVIS interface is ready`;
     await speakText(statusText);
   }, [speakText]);
 

@@ -14,18 +14,75 @@ import {
   Avatar,
   Switch,
   FormControlLabel,
-  Divider
+  Divider,
+  TextField
 } from '@mui/material';
 import {
   Mic as MicIcon,
   VolumeUp as SpeakIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Send as SendIcon
 } from '@mui/icons-material';
 
 import { useJarvis } from '../contexts/JarvisContext';
+import { useJarvisAPI } from '../hooks/useJarvisAPI';
+import VoiceRecorder from '../components/VoiceRecorder';
+import MicrophoneTest from '../components/MicrophoneTest';
 
 function VoiceInterface() {
   const { state, actions } = useJarvis();
+  const { executeCommand, speakText, isConnected } = useJarvisAPI();
+  const [textCommand, setTextCommand] = useState('');
+  const [isProcessingCommand, setIsProcessingCommand] = useState(false);
+
+  // Gérer la transcription vocale
+  const handleVoiceTranscription = async (transcription) => {
+    setIsProcessingCommand(true);
+    try {
+      actions.addLog('info', `Commande vocale: "${transcription}"`, 'voice');
+      
+      // Exécuter la commande transcrite
+      const result = await executeCommand(transcription);
+      
+      if (result.success) {
+        actions.addNotification('success', 'Commande exécutée', 
+          `${result.actions_count} actions planifiées`);
+      }
+    } catch (error) {
+      actions.addNotification('error', 'Erreur', error.message);
+    } finally {
+      setIsProcessingCommand(false);
+    }
+  };
+
+  // Exécuter une commande texte
+  const handleTextCommand = async () => {
+    if (!textCommand.trim()) return;
+    
+    setIsProcessingCommand(true);
+    try {
+      const result = await executeCommand(textCommand);
+      
+      if (result.success) {
+        actions.addNotification('success', 'Commande exécutée', 
+          `${result.actions_count} actions planifiées`);
+        setTextCommand('');
+      }
+    } catch (error) {
+      actions.addNotification('error', 'Erreur', error.message);
+    } finally {
+      setIsProcessingCommand(false);
+    }
+  };
+
+  // Test de synthèse vocale
+  const handleVoiceTest = async () => {
+    try {
+      await speakText('Test de l\'interface vocale JARVIS. Le système fonctionne correctement.');
+    } catch (error) {
+      actions.addNotification('error', 'Erreur', 'Test vocal échoué');
+    }
+  };
   
   return (
     <Box>
@@ -34,7 +91,8 @@ function VoiceInterface() {
       </Typography>
       
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
+        {/* Interface d'enregistrement vocal */}
+        <Grid item xs={12} md={8}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
@@ -42,10 +100,72 @@ function VoiceInterface() {
                   <MicIcon />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6">Module Vocal</Typography>
+                  <Typography variant="h6">Commandes Vocales</Typography>
                   <Chip 
-                    label={state.modules.voice.status || 'unknown'} 
-                    color={state.modules.voice.status === 'active' ? 'success' : 'default'}
+                    label={isConnected ? 'En ligne' : 'Hors ligne'} 
+                    color={isConnected ? 'success' : 'error'}
+                    size="small"
+                  />
+                </Box>
+              </Box>
+              
+              {/* Composant d'enregistrement vocal */}
+              <Box sx={{ py: 3 }}>
+                <VoiceRecorder 
+                  onTranscription={handleVoiceTranscription}
+                  disabled={!isConnected || isProcessingCommand}
+                />
+              </Box>
+              
+              <Divider sx={{ my: 2 }} />
+              
+              {/* Interface texte alternative */}
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                Commande Texte (Alternative)
+              </Typography>
+              
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  placeholder="Tapez votre commande ici..."
+                  value={textCommand}
+                  onChange={(e) => setTextCommand(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleTextCommand();
+                    }
+                  }}
+                  disabled={!isConnected || isProcessingCommand}
+                  size="small"
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleTextCommand}
+                  disabled={!isConnected || isProcessingCommand || !textCommand.trim()}
+                  startIcon={<SendIcon />}
+                >
+                  Envoyer
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Panneau de contrôle et statistiques */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                <Avatar sx={{ bgcolor: 'primary.main' }}>
+                  <SettingsIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6">Contrôles</Typography>
+                  <Chip 
+                    label={state.modules.voice?.status || 'unknown'} 
+                    color={state.modules.voice?.status === 'active' ? 'success' : 'default'}
                     size="small"
                   />
                 </Box>
@@ -61,6 +181,17 @@ function VoiceInterface() {
                 label="Mode vocal activé"
                 sx={{ mb: 2 }}
               />
+              
+              <Button
+                variant="outlined"
+                startIcon={<SpeakIcon />}
+                onClick={handleVoiceTest}
+                disabled={!isConnected}
+                fullWidth
+                sx={{ mb: 2 }}
+              >
+                Test Vocal
+              </Button>
               
               <Divider sx={{ my: 2 }} />
               
@@ -92,6 +223,11 @@ function VoiceInterface() {
               </Button>
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* Diagnostic microphone */}
+        <Grid item xs={12}>
+          <MicrophoneTest />
         </Grid>
       </Grid>
     </Box>

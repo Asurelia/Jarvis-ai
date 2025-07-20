@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 
 import { useJarvis } from '../contexts/JarvisContext';
+import RealtimeOCR from '../components/RealtimeOCR';
 
 function VisionControl() {
   const { state, actions, electronAPI } = useJarvis();
@@ -109,6 +110,11 @@ function VisionControl() {
               </Button>
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* OCR Temps Réel */}
+        <Grid item xs={12}>
+          <RealtimeOCR />
         </Grid>
       </Grid>
     </Box>

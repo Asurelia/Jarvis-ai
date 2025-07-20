@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS Connection Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+            color: white;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .status-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .status-online { background-color: #4caf50; }
+        .status-offline { background-color: #f44336; }
+        .status-connecting { 
+            background-color: #ff9800; 
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        button {
+            background: linear-gradient(45deg, #00d4ff, #0099cc);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: 500;
+        }
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 212, 255, 0.3);
+        }
+        .log {
+            background: #1a1a1a;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 JARVIS Connection Diagnostics</h1>
+        
+        <div class="status-card">
+            <h3><span id="api-indicator" class="status-indicator status-offline"></span>API Status</h3>
+            <p>Endpoint: <code>http://localhost:8000/api/health</code></p>
+            <p>Status: <span id="api-status">Testing...</span></p>
+            <button onclick="testAPI()">Test API</button>
+        </div>
+        
+        <div class="status-card">
+            <h3><span id="ws-indicator" class="status-indicator status-offline"></span>WebSocket Status</h3>
+            <p>Endpoint: <code>ws://localhost:8000/ws</code></p>
+            <p>Status: <span id="ws-status">Disconnected</span></p>
+            <button onclick="testWebSocket()">Test WebSocket</button>
+            <button onclick="connectWebSocket()">Connect WebSocket</button>
+        </div>
+        
+        <div class="status-card">
+            <h3>System Information</h3>
+            <div id="system-info">Loading...</div>
+            <button onclick="refreshSystemInfo()">Refresh</button>
+        </div>
+        
+        <div class="status-card">
+            <h3>Connection Log</h3>
+            <div id="log" class="log">Ready to test connections...\n</div>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div class="status-card">
+            <h3>Actions</h3>
+            <button onclick="runFullTest()">🔍 Run Full Test</button>
+            <button onclick="window.location.href='/'">🏠 Back to JARVIS</button>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').textContent = 'Log cleared...\n';
+        }
+        
+        async function testAPI() {
+            const indicator = document.getElementById('api-indicator');
+            const status = document.getElementById('api-status');
+            
+            indicator.className = 'status-indicator status-connecting';
+            status.textContent = 'Testing...';
+            log('🔍 Testing API connection...');
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/health');
+                const data = await response.json();
+                
+                if (data.status === 'healthy') {
+                    indicator.className = 'status-indicator status-online';
+                    status.textContent = `Online - v${data.version} (${Math.floor(data.uptime)}s uptime)`;
+                    log('✅ API is healthy!');
+                    return true;
+                } else {
+                    indicator.className = 'status-indicator status-offline';
+                    status.textContent = 'Unhealthy';
+                    log('❌ API is not healthy');
+                    return false;
+                }
+            } catch (error) {
+                indicator.className = 'status-indicator status-offline';
+                status.textContent = `Error: ${error.message}`;
+                log(`💥 API connection failed: ${error.message}`);
+                return false;
+            }
+        }
+        
+        function testWebSocket() {
+            return new Promise((resolve) => {
+                const indicator = document.getElementById('ws-indicator');
+                const status = document.getElementById('ws-status');
+                
+                indicator.className = 'status-indicator status-connecting';
+                status.textContent = 'Testing...';
+                log('🔍 Testing WebSocket connection...');
+                
+                const testWs = new WebSocket('ws://localhost:8000/ws');
+                
+                const timeout = setTimeout(() => {
+                    testWs.close();
+                    indicator.className = 'status-indicator status-offline';
+                    status.textContent = 'Connection timeout';
+                    log('⏰ WebSocket connection timeout');
+                    resolve(false);
+                }, 5000);
+                
+                testWs.onopen = () => {
+                    clearTimeout(timeout);
+                    indicator.className = 'status-indicator status-online';
+                    status.textContent = 'Connected (test)';
+                    log('✅ WebSocket connected successfully!');
+                    testWs.close();
+                    resolve(true);
+                };
+                
+                testWs.onerror = (error) => {
+                    clearTimeout(timeout);
+                    indicator.className = 'status-indicator status-offline';
+                    status.textContent = 'Connection failed';
+                    log(`💥 WebSocket error: ${error.message || 'Unknown error'}`);
+                    resolve(false);
+                };
+                
+                testWs.onclose = () => {
+                    log('🔌 Test WebSocket disconnected');
+                };
+            });
+        }
+        
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+                return;
+            }
+            
+            const indicator = document.getElementById('ws-indicator');
+            const status = document.getElementById('ws-status');
+            
+            indicator.className = 'status-indicator status-connecting';
+            status.textContent = 'Connecting...';
+            log('🔗 Connecting to WebSocket...');
+            
+            ws = new WebSocket('ws://localhost:8000/ws');
+            
+            ws.onopen = () => {
+                indicator.className = 'status-indicator status-online';
+                status.textContent = 'Connected (persistent)';
+                log('✅ WebSocket connected (persistent)');
+            };
+            
+            ws.onmessage = (event) => {
+                log(`📨 Received: ${event.data}`);
+            };
+            
+            ws.onerror = (error) => {
+                indicator.className = 'status-indicator status-offline';
+                status.textContent = 'Error';
+                log(`💥 WebSocket error: ${error.message || 'Unknown error'}`);
+            };
+            
+            ws.onclose = () => {
+                indicator.className = 'status-indicator status-offline';
+                status.textContent = 'Disconnected';
+                log('🔌 WebSocket disconnected');
+            };
+        }
+        
+        async function refreshSystemInfo() {
+            const infoElement = document.getElementById('system-info');
+            infoElement.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/status');
+                const data = await response.json();
+                
+                const activeModules = data.modules.filter(m => m.status === 'active').length;
+                const totalModules = data.modules.length;
+                const wsConnections = data.performance.websocket_connections;
+                const uptime = Math.floor(data.uptime);
+                
+                infoElement.innerHTML = `
+                    <p><strong>Modules:</strong> ${activeModules}/${totalModules} active</p>
+                    <p><strong>WebSocket Connections:</strong> ${wsConnections}</p>
+                    <p><strong>Uptime:</strong> ${uptime}s</p>
+                    <p><strong>Messages Sent:</strong> ${data.performance.messages_sent}</p>
+                `;
+                
+                log(`📊 System info updated: ${activeModules}/${totalModules} modules active`);
+            } catch (error) {
+                infoElement.textContent = `Error: ${error.message}`;
+                log(`💥 Failed to get system info: ${error.message}`);
+            }
+        }
+        
+        async function runFullTest() {
+            log('🚀 Running full connection test...');
+            
+            const apiOk = await testAPI();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            const wsOk = await testWebSocket();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await refreshSystemInfo();
+            
+            if (apiOk && wsOk) {
+                log('🎉 All tests passed! JARVIS should be working properly.');
+            } else {
+                log('⚠️ Some tests failed. Check the logs above.');
+            }
+        }
+        
+        // Auto-run tests on page load
+        window.addEventListener('load', () => {
+            log('🤖 JARVIS Connection Diagnostics loaded');
+            setTimeout(runFullTest, 1000);
+        });
+    </script>
+</body>
+</html> 

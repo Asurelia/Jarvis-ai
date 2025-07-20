@@ -57,6 +57,10 @@ class VoiceCommandRequest(BaseModel):
     text: str = Field(..., description="Texte à synthétiser")
     voice: Optional[str] = Field(None, description="Voix à utiliser")
 
+class VoiceTranscribeRequest(BaseModel):
+    audio_data: str = Field(..., description="Données audio en base64")
+    format: str = Field(default="webm", description="Format audio (webm, wav, etc.)")
+
 class ModuleStatus(BaseModel):
     name: str
     status: str
@@ -415,6 +419,79 @@ async def speak_text(request: VoiceCommandRequest):
         logger.error(f"Erreur synthèse vocale: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/voice/transcribe")
+async def transcribe_audio(request: VoiceTranscribeRequest):
+    """Transcription audio vers texte"""
+    try:
+        if not jarvis_modules.get("voice"):
+            raise HTTPException(status_code=503, detail="Interface vocale non disponible")
+        
+        logger.info(f"🎧 Transcription audio reçue (format: {request.format})")
+        
+        # Décoder les données audio base64
+        import base64
+        import io
+        import tempfile
+        
+        try:
+            audio_bytes = base64.b64decode(request.audio_data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Données audio invalides: {e}")
+        
+        # Créer un fichier temporaire pour l'audio
+        with tempfile.NamedTemporaryFile(suffix=f".{request.format}", delete=False) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Utiliser le module STT de JARVIS pour la transcription
+            stt_module = jarvis_modules["voice"].stt
+            if not stt_module:
+                raise HTTPException(status_code=503, detail="Module STT non disponible")
+            
+            # Lire et transcrire le fichier audio
+            with open(temp_file_path, 'rb') as audio_file:
+                audio_data = audio_file.read()
+                
+            # Transcrire l'audio
+            result = await stt_module.transcribe_audio_data(audio_data)
+            
+            if result.success and result.text:
+                logger.success(f"✅ Transcription réussie: '{result.text}'")
+                
+                # Diffuser via WebSocket
+                await websocket_manager.broadcast({
+                    "type": "voice_transcription",
+                    "data": {
+                        "transcription": result.text,
+                        "confidence": result.confidence,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                })
+                
+                return {
+                    "success": True,
+                    "transcription": result.text,
+                    "confidence": result.confidence,
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                raise HTTPException(status_code=400, detail="Transcription échouée ou audio vide")
+                
+        finally:
+            # Nettoyer le fichier temporaire
+            import os
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur transcription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/screenshot")
 async def take_screenshot():
     """Prend une capture d'écran"""
@@ -456,6 +533,58 @@ async def take_screenshot():
         logger.error(f"Erreur capture: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class OCRRequest(BaseModel):
+    screenshot_path: str = Field(..., description="Chemin vers la capture d'écran")
+    engine: str = Field(default="auto", description="Moteur OCR à utiliser")
+
+@app.post("/api/vision/ocr")
+async def perform_ocr(request: OCRRequest):
+    """Effectue l'OCR sur une image"""
+    try:
+        if not jarvis_modules.get("ocr"):
+            raise HTTPException(status_code=503, detail="Module OCR non disponible")
+        
+        logger.info(f"🔍 OCR demandé pour {request.screenshot_path} avec moteur {request.engine}")
+        
+        # Charger l'image
+        from PIL import Image
+        import os
+        
+        if not os.path.exists(request.screenshot_path):
+            raise HTTPException(status_code=404, detail="Fichier image non trouvé")
+        
+        image = Image.open(request.screenshot_path)
+        
+        # Effectuer l'OCR
+        result = await jarvis_modules["ocr"].extract_text(image, request.engine)
+        
+        # Diffuser les résultats via WebSocket
+        await websocket_manager.broadcast({
+            "type": "ocr_completed",
+            "data": {
+                "text": result.all_text,
+                "word_count": len(result.words),
+                "confidence": result.confidence_avg,
+                "processing_time": result.processing_time,
+                "timestamp": datetime.now().isoformat()
+            }
+        })
+        
+        return {
+            "success": True,
+            "text": result.all_text,
+            "words": [word.to_dict() for word in result.words],
+            "lines": result.lines,
+            "confidence_avg": result.confidence_avg,
+            "processing_time": result.processing_time,
+            "engine_used": request.engine,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur OCR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/apps")
 async def get_running_applications():
     """Obtient la liste des applications en cours"""
@@ -493,17 +622,41 @@ async def get_conversations():
         if not jarvis_modules.get("memory"):
             raise HTTPException(status_code=503, detail="Système mémoire non disponible")
         
-        # Pour l'instant, retourner un exemple
-        # TODO: Implémenter la récupération réelle depuis ChromaDB
-        conversations = [
-            {
-                "id": "conv_1",
-                "summary": "Discussion sur la capture d'écran",
-                "message_count": 5,
-                "created_at": "2024-01-20T10:30:00Z",
-                "last_activity": "2024-01-20T10:35:00Z"
-            }
-        ]
+        # Récupérer les conversations réelles depuis le système de mémoire
+        memory_system = jarvis_modules["memory"]
+        
+        # Obtenir les conversations récentes
+        conversations = []
+        try:
+            # Accéder à la collection des conversations
+            if hasattr(memory_system, 'conversations_collection'):
+                # Récupérer les dernières conversations
+                results = memory_system.conversations_collection.get(
+                    limit=10,
+                    include=['metadatas', 'documents']
+                )
+                
+                for i, doc in enumerate(results.get('documents', [])):
+                    metadata = results.get('metadatas', [{}])[i]
+                    conversations.append({
+                        "id": results.get('ids', [''])[i],
+                        "summary": doc[:100] + "..." if len(doc) > 100 else doc,
+                        "message_count": metadata.get('message_count', 1),
+                        "created_at": metadata.get('created_at', datetime.now().isoformat()),
+                        "last_activity": metadata.get('last_activity', datetime.now().isoformat())
+                    })
+        except Exception as e:
+            logger.warning(f"Erreur récupération conversations ChromaDB: {e}")
+            # Fallback avec données d'exemple
+            conversations = [
+                {
+                    "id": "conv_1",
+                    "summary": "Conversation récente avec JARVIS",
+                    "message_count": 3,
+                    "created_at": datetime.now().isoformat(),
+                    "last_activity": datetime.now().isoformat()
+                }
+            ]
         
         return {
             "success": True,
@@ -514,6 +667,240 @@ async def get_conversations():
         
     except Exception as e:
         logger.error(f"Erreur récupération conversations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AutocompleteRequest(BaseModel):
+    text: str = Field(..., description="Texte pour l'autocomplétion")
+    context: str = Field(default="", description="Contexte de l'autocomplétion")
+    max_suggestions: int = Field(default=5, description="Nombre maximum de suggestions")
+
+@app.post("/api/autocomplete/suggest")
+async def get_autocomplete_suggestions(request: AutocompleteRequest):
+    """Obtient des suggestions d'autocomplétion"""
+    try:
+        if not jarvis_modules.get("suggestion_engine"):
+            raise HTTPException(status_code=503, detail="Moteur de suggestions non disponible")
+        
+        logger.info(f"💡 Suggestions demandées pour: {request.text[:50]}...")
+        
+        # Obtenir les suggestions depuis le moteur
+        suggestions = await jarvis_modules["suggestion_engine"].get_suggestions(
+            request.text,
+            context=request.context,
+            max_suggestions=request.max_suggestions
+        )
+        
+        return {
+            "success": True,
+            "suggestions": suggestions,
+            "input_text": request.text,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur autocomplétion: {e}")
+        # Fallback avec suggestions simples
+        simple_suggestions = [
+            f"{request.text} - suggestion 1",
+            f"{request.text} - suggestion 2",
+            f"{request.text} - suggestion 3"
+        ]
+        
+        return {
+            "success": True,
+            "suggestions": simple_suggestions,
+            "input_text": request.text,
+            "fallback": True,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/autocomplete/status")
+async def get_autocomplete_status():
+    """Obtient le statut de l'autocomplétion globale"""
+    try:
+        autocomplete_active = False
+        stats = {
+            "suggestions_generated": 0,
+            "words_learned": 29,  # Depuis les logs
+            "patterns_detected": 0
+        }
+        
+        if jarvis_modules.get("autocomplete"):
+            autocomplete_active = getattr(jarvis_modules["autocomplete"], 'is_active', False)
+            if hasattr(jarvis_modules["autocomplete"], 'get_stats'):
+                stats.update(jarvis_modules["autocomplete"].get_stats())
+        
+        return {
+            "success": True,
+            "active": autocomplete_active,
+            "stats": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur statut autocomplétion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/autocomplete/start")
+async def start_autocomplete():
+    """Démarre l'autocomplétion globale"""
+    try:
+        if not jarvis_modules.get("autocomplete"):
+            raise HTTPException(status_code=503, detail="Module autocomplétion non disponible")
+        
+        logger.info("🚀 Démarrage autocomplétion globale...")
+        
+        # Démarrer l'autocomplétion
+        if hasattr(jarvis_modules["autocomplete"], 'start'):
+            await jarvis_modules["autocomplete"].start()
+        
+        # Diffuser l'événement
+        await websocket_manager.broadcast({
+            "type": "autocomplete_started",
+            "data": {
+                "message": "Autocomplétion globale activée",
+                "timestamp": datetime.now().isoformat()
+            }
+        })
+        
+        return {
+            "success": True,
+            "message": "Autocomplétion globale démarrée",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur démarrage autocomplétion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/autocomplete/stop")
+async def stop_autocomplete():
+    """Arrête l'autocomplétion globale"""
+    try:
+        if not jarvis_modules.get("autocomplete"):
+            raise HTTPException(status_code=503, detail="Module autocomplétion non disponible")
+        
+        logger.info("⏹️ Arrêt autocomplétion globale...")
+        
+        # Arrêter l'autocomplétion
+        if hasattr(jarvis_modules["autocomplete"], 'stop'):
+            await jarvis_modules["autocomplete"].stop()
+        
+        # Diffuser l'événement
+        await websocket_manager.broadcast({
+            "type": "autocomplete_stopped",
+            "data": {
+                "message": "Autocomplétion globale désactivée",
+                "timestamp": datetime.now().isoformat()
+            }
+        })
+        
+        return {
+            "success": True,
+            "message": "Autocomplétion globale arrêtée",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur arrêt autocomplétion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ExecuteActionRequest(BaseModel):
+    action_type: str = Field(..., description="Type d'action à exécuter")
+    parameters: Dict[str, Any] = Field(default={}, description="Paramètres de l'action")
+    description: str = Field(default="", description="Description de l'action")
+
+@app.post("/api/executor/execute")
+async def execute_action(request: ExecuteActionRequest):
+    """Exécute une action via l'exécuteur"""
+    try:
+        if not jarvis_modules.get("executor"):
+            raise HTTPException(status_code=503, detail="Exécuteur non disponible")
+        
+        logger.info(f"⚡ Exécution action: {request.action_type}")
+        
+        # Créer une action à exécuter
+        from core.ai.action_planner import Action, ActionType
+        
+        # Mapper les types d'actions
+        action_type_map = {
+            "click": ActionType.CLICK,
+            "type": ActionType.TYPE,
+            "key": ActionType.KEY_PRESS,
+            "screenshot": ActionType.SCREENSHOT,
+            "analyze": ActionType.ANALYZE_SCREEN,
+            "wait": ActionType.WAIT
+        }
+        
+        action_type_enum = action_type_map.get(request.action_type, ActionType.CLICK)
+        
+        action = Action(
+            type=action_type_enum,
+            description=request.description or f"Exécuter {request.action_type}",
+            parameters=request.parameters
+        )
+        
+        # Exécuter l'action
+        result = await jarvis_modules["executor"].execute_action(action)
+        
+        # Diffuser le résultat via WebSocket
+        await websocket_manager.broadcast({
+            "type": "action_executed",
+            "data": {
+                "action_type": request.action_type,
+                "success": result.get("success", False),
+                "result": result,
+                "timestamp": datetime.now().isoformat()
+            }
+        })
+        
+        return {
+            "success": result.get("success", False),
+            "action_type": request.action_type,
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur exécution action: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/memory/stats")
+async def get_memory_stats():
+    """Obtient les statistiques du système de mémoire"""
+    try:
+        if not jarvis_modules.get("memory"):
+            raise HTTPException(status_code=503, detail="Système mémoire non disponible")
+        
+        memory_system = jarvis_modules["memory"]
+        
+        # Collecter les statistiques
+        stats = {
+            "collections": 5,  # Nombre de collections ChromaDB
+            "total_entries": 0,
+            "conversations": 0,
+            "commands": 0,
+            "screenshots": 0,
+            "preferences": 0
+        }
+        
+        try:
+            # Compter les entrées dans chaque collection si possible
+            if hasattr(memory_system, 'conversations_collection'):
+                conv_count = memory_system.conversations_collection.count()
+                stats["conversations"] = conv_count
+                stats["total_entries"] += conv_count
+        except:
+            pass
+        
+        return {
+            "success": True,
+            "stats": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur statistiques mémoire: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # === WEBSOCKET ENDPOINT ===

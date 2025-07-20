@@ -21,6 +21,7 @@ import {
 // Icons
 import {
   Dashboard as DashboardIcon,
+  Chat as ChatIcon,
   Visibility as VisionIcon,
   Mic as VoiceIcon,
   TextFields as AutocompleteIcon,
@@ -45,6 +46,14 @@ const navigationConfig = [
         path: '/dashboard',
         icon: DashboardIcon,
         description: 'Vue d\'ensemble de JARVIS'
+      },
+      {
+        id: 'chat',
+        label: 'Chat',
+        path: '/chat',
+        icon: ChatIcon,
+        description: 'Conversation avec JARVIS',
+        badge: state => state.jarvis.status === 'connected' ? null : 'offline'
       }
     ]
   },

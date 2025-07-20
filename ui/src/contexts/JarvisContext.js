@@ -497,7 +497,7 @@ export function JarvisProvider({ children }) {
     // Health check
     async checkHealth() {
       try {
-        const response = await this.request('/api/health');
+        const response = await apiService.request('/api/health');
         return response.status === 'healthy';
       } catch (error) {
         return false;
@@ -506,12 +506,12 @@ export function JarvisProvider({ children }) {
     
     // Statut système
     async getSystemStatus() {
-      return await this.request('/api/status');
+      return await apiService.request('/api/status');
     },
     
     // Exécuter une commande
     async executeCommand(command, mode = 'auto') {
-      return await this.request('/api/command', {
+      return await apiService.request('/api/command', {
         method: 'POST',
         body: JSON.stringify({ command, mode })
       });
@@ -519,7 +519,7 @@ export function JarvisProvider({ children }) {
     
     // Chat avec l'IA
     async chatWithAI(message, conversationId = null) {
-      return await this.request('/api/chat', {
+      return await apiService.request('/api/chat', {
         method: 'POST',
         body: JSON.stringify({ message, conversation_id: conversationId })
       });
@@ -527,7 +527,7 @@ export function JarvisProvider({ children }) {
     
     // Synthèse vocale
     async speakText(text, voice = null) {
-      return await this.request('/api/voice/speak', {
+      return await apiService.request('/api/voice/speak', {
         method: 'POST',
         body: JSON.stringify({ text, voice })
       });
@@ -535,17 +535,17 @@ export function JarvisProvider({ children }) {
     
     // Capture d'écran
     async takeScreenshot() {
-      return await this.request('/api/screenshot');
+      return await apiService.request('/api/screenshot');
     },
     
     // Applications en cours
     async getRunningApps() {
-      return await this.request('/api/apps');
+      return await apiService.request('/api/apps');
     },
     
     // Conversations mémoire
     async getConversations() {
-      return await this.request('/api/memory/conversations');
+      return await apiService.request('/api/memory/conversations');
     }
   };
   

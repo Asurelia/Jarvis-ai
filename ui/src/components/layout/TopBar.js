@@ -29,6 +29,7 @@ import {
   AutoAwesome as AutocompleteIcon,
   Security as SandboxIcon,
   BugReport as DebugIcon,
+  Chat as ChatIcon,
   Refresh as RefreshIcon,
   MoreVert as MoreIcon,
   Screenshot as ScreenshotIcon,
@@ -37,6 +38,7 @@ import {
 } from '@mui/icons-material';
 
 import { useJarvis } from '../../contexts/JarvisContext';
+import VoiceRecorder from '../VoiceRecorder';
 
 // Configuration des pages pour le titre
 const pageConfig = {
@@ -50,7 +52,7 @@ const pageConfig = {
   '/settings': { title: 'Paramètres', subtitle: 'Configuration JARVIS' }
 };
 
-function TopBar({ height, showMenuButton, isElectron }) {
+function TopBar({ height, showMenuButton, isElectron, onChatToggle, isChatOpen }) {
   const theme = useTheme();
   const location = useLocation();
   const { state, actions, electronAPI } = useJarvis();
@@ -58,6 +60,7 @@ function TopBar({ height, showMenuButton, isElectron }) {
   // État local
   const [moreMenuAnchor, setMoreMenuAnchor] = useState(null);
   const [isExecutingCommand, setIsExecutingCommand] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   
   // Configuration de la page actuelle
   const currentPage = pageConfig[location.pathname] || { 
@@ -110,6 +113,20 @@ function TopBar({ height, showMenuButton, isElectron }) {
   const handleMoreMenuOpen = (event) => {
     setMoreMenuAnchor(event.currentTarget);
   };
+
+  const handleVoiceTranscription = async (transcription) => {
+    try {
+      // Exécuter la commande transcrite
+      actions.addLog('info', `Commande vocale: "${transcription}"`, 'voice');
+      actions.addNotification('info', 'Commande vocale', `Exécution: ${transcription}`);
+      
+      // Ici on pourrait ajouter la logique d'exécution
+      // await executeCommand(transcription);
+      
+    } catch (error) {
+      actions.addNotification('error', 'Erreur', error.message);
+    }
+  };
   
   const handleMoreMenuClose = () => {
     setMoreMenuAnchor(null);
@@ -127,6 +144,7 @@ function TopBar({ height, showMenuButton, isElectron }) {
   };
   
   return (
+    <>
     <AppBar sx={appBarStyle}>
       <Toolbar sx={{ height: height, paddingLeft: 2, paddingRight: 2 }}>
         {/* Menu burger (mobile) */}
@@ -209,23 +227,45 @@ function TopBar({ height, showMenuButton, isElectron }) {
         
         {/* Contrôles rapides */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {/* Toggle Voice Mode */}
-          <Tooltip title={`Mode vocal ${state.config.voiceMode ? 'activé' : 'désactivé'}`}>
-            <IconButton
-              size="small"
-              onClick={actions.toggleVoiceMode}
-              sx={{
-                color: state.config.voiceMode 
-                  ? theme.palette.primary.main 
-                  : theme.palette.text.secondary,
-                backgroundColor: state.config.voiceMode 
-                  ? alpha(theme.palette.primary.main, 0.1) 
-                  : 'transparent'
-              }}
-            >
-              {state.config.voiceMode ? <MicIcon /> : <MicOffIcon />}
-            </IconButton>
-          </Tooltip>
+          {/* Voice Recorder - Mode Web */}
+          {!isElectron && (
+            <Tooltip title="Commande vocale">
+              <IconButton
+                size="small"
+                onClick={() => setShowVoiceRecorder(!showVoiceRecorder)}
+                sx={{
+                  color: showVoiceRecorder 
+                    ? theme.palette.primary.main 
+                    : theme.palette.text.secondary,
+                  backgroundColor: showVoiceRecorder 
+                    ? alpha(theme.palette.primary.main, 0.1) 
+                    : 'transparent'
+                }}
+              >
+                <MicIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Toggle Voice Mode - Mode Electron */}
+          {isElectron && (
+            <Tooltip title={`Mode vocal ${state.config.voiceMode ? 'activé' : 'désactivé'}`}>
+              <IconButton
+                size="small"
+                onClick={actions.toggleVoiceMode}
+                sx={{
+                  color: state.config.voiceMode 
+                    ? theme.palette.primary.main 
+                    : theme.palette.text.secondary,
+                  backgroundColor: state.config.voiceMode 
+                    ? alpha(theme.palette.primary.main, 0.1) 
+                    : 'transparent'
+                }}
+              >
+                {state.config.voiceMode ? <MicIcon /> : <MicOffIcon />}
+              </IconButton>
+            </Tooltip>
+          )}
           
           {/* Toggle Autocomplete */}
           <Tooltip title={`Autocomplétion ${state.config.autocompleteEnabled ? 'activée' : 'désactivée'}`}>
@@ -262,6 +302,26 @@ function TopBar({ height, showMenuButton, isElectron }) {
               <SandboxIcon />
             </IconButton>
           </Tooltip>
+
+          {/* Chat Toggle */}
+          {onChatToggle && (
+            <Tooltip title={isChatOpen ? 'Fermer le chat' : 'Ouvrir le chat'}>
+              <IconButton
+                size="small"
+                onClick={onChatToggle}
+                sx={{
+                  color: isChatOpen 
+                    ? theme.palette.primary.main 
+                    : theme.palette.text.secondary,
+                  backgroundColor: isChatOpen 
+                    ? alpha(theme.palette.primary.main, 0.1) 
+                    : 'transparent'
+                }}
+              >
+                <ChatIcon />
+              </IconButton>
+            </Tooltip>
+          )}
           
           {/* Screenshot rapide */}
           {isElectron && (
@@ -339,7 +399,7 @@ function TopBar({ height, showMenuButton, isElectron }) {
                 handleMoreMenuClose();
               }}
             >
-              <BugReport sx={{ marginRight: 1, fontSize: '1rem' }} />
+              <DebugIcon sx={{ marginRight: 1, fontSize: '1rem' }} />
               Mode Debug
               <Chip
                 label={state.config.debugMode ? 'ON' : 'OFF'}
@@ -398,6 +458,44 @@ function TopBar({ height, showMenuButton, isElectron }) {
         )}
       </Toolbar>
     </AppBar>
+    
+    {/* Overlay Voice Recorder pour mode Web */}
+    {!isElectron && showVoiceRecorder && (
+      <Box
+        sx={{
+          position: 'fixed',
+          top: height + 10,
+          right: 20,
+          zIndex: 1300,
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: 2,
+          padding: 2,
+          boxShadow: theme.shadows[8],
+          backdropFilter: 'blur(10px)',
+          minWidth: 300
+        }}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+            Commande Vocale
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={() => setShowVoiceRecorder(false)}
+            sx={{ color: theme.palette.text.secondary }}
+          >
+            ✕
+          </IconButton>
+        </Box>
+        
+        <VoiceRecorder 
+          onTranscription={handleVoiceTranscription}
+          disabled={state.jarvis.status !== 'connected'}
+        />
+      </Box>
+    )}
+    </>
   );
 }
 

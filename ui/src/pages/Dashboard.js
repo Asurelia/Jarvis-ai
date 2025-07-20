@@ -523,7 +523,7 @@ function Dashboard() {
                       color="warning"
                     />
                   </Box>
-                </Box>
+                )}
                 
                 {state.jarvis.status === 'connected' && (
                   <>
