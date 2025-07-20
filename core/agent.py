@@ -230,11 +230,11 @@ class JarvisAgent:
             logger.error(f"❌ Erreur lors de l'initialisation: {e}")
             raise
     
-    async def process_command(self, command: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Traiter une commande utilisateur"""
+    async def process_command(self, command: str, context: Dict[str, Any] = None, mode: str = "conversation") -> Dict[str, Any]:
+        """Traiter une commande utilisateur en mode conversationnel"""
         context = context or {}
         
-        logger.info(f"📝 Commande reçue: {command}")
+        logger.info(f"📝 Commande reçue: {command} (mode: {mode})")
         
         if not self.security_manager.can_perform_action():
             return {
@@ -244,22 +244,67 @@ class JarvisAgent:
             }
         
         try:
-            # TODO: Implémenter le traitement des commandes
-            # 1. Analyser la commande avec le module AI
-            # 2. Planifier les actions nécessaires
-            # 3. Exécuter les actions via les modules appropriés
-            # 4. Retourner le résultat
+            # Mode conversation naturelle par défaut
+            if mode == "conversation":
+                from core.simple_conversation import SimpleConversation
+                
+                if not hasattr(self, 'conversation'):
+                    self.conversation = SimpleConversation(
+                        self.modules['ollama'],
+                        self.modules['planner']
+                    )
+                
+                response, action = await self.conversation.chat(command)
+                
+                # Si une action est identifiée, l'exécuter
+                action_results = None
+                if action:
+                    logger.info(f"🎯 Action détectée: {action['command']}")
+                    # Planifier et exécuter l'action
+                    action_sequence = await self.modules['planner'].plan_action(action['command'])
+                    
+                    action_results = []
+                    for act in action_sequence.actions:
+                        logger.info(f"🔧 Exécution: {act.type.value}")
+                        result = await self._execute_action(act)
+                        action_results.append(result)
+                        
+                        if not result.get("success", False):
+                            logger.error(f"❌ Échec: {act.type.value}")
+                            break
+                
+                return {
+                    "success": True,
+                    "response": response,
+                    "command": command,
+                    "action_executed": action is not None,
+                    "action_results": action_results,
+                    "timestamp": asyncio.get_event_loop().time()
+                }
             
-            result = {
-                "success": True,
-                "command": command,
-                "context": context,
-                "actions_performed": [],
-                "timestamp": asyncio.get_event_loop().time()
-            }
-            
-            logger.success(f"✅ Commande traitée: {command}")
-            return result
+            # Mode commande directe (legacy)
+            else:
+                action_sequence = await self.modules['planner'].plan_action(command)
+                
+                results = []
+                for action in action_sequence.actions:
+                    logger.info(f"🔧 Exécution action: {action.type.value}")
+                    result = await self._execute_action(action)
+                    results.append(result)
+                    
+                    if not result.get("success", False):
+                        logger.error(f"❌ Échec action: {action.type.value}")
+                        break
+                
+                success = all(r.get("success", False) for r in results)
+                
+                return {
+                    "success": success,
+                    "results": results,
+                    "sequence": action_sequence.to_dict(),
+                    "command": command,
+                    "timestamp": asyncio.get_event_loop().time()
+                }
             
         except Exception as e:
             logger.error(f"❌ Erreur lors du traitement de la commande: {e}")
@@ -267,6 +312,82 @@ class JarvisAgent:
                 "success": False,
                 "error": str(e),
                 "command": command
+            }
+    
+    async def _execute_action(self, action) -> Dict[str, Any]:
+        """Exécute une action spécifique"""
+        try:
+            from core.ai.action_planner import ActionType
+            
+            if action.type == ActionType.TAKE_SCREENSHOT:
+                screenshot_path = await self.take_screenshot()
+                return {
+                    "success": screenshot_path is not None,
+                    "result": {"screenshot_path": screenshot_path} if screenshot_path else None,
+                    "message": "Capture d'écran prise" if screenshot_path else "Échec capture d'écran"
+                }
+            
+            elif action.type == ActionType.ANALYZE_SCREEN:
+                analysis = await self.analyze_screen()
+                return {
+                    "success": len(analysis) > 0,
+                    "result": analysis,
+                    "message": "Écran analysé"
+                }
+            
+            elif action.type == ActionType.OPEN_APPLICATION:
+                app_name = action.parameters.get("app_name", "")
+                # Simple implémentation pour les apps courantes
+                import subprocess
+                app_commands = {
+                    "chrome": "chrome",
+                    "firefox": "firefox", 
+                    "notepad": "notepad",
+                    "calculator": "calc"
+                }
+                
+                command = app_commands.get(app_name.lower(), app_name)
+                try:
+                    subprocess.Popen(command, shell=True)
+                    return {
+                        "success": True,
+                        "result": {"app": app_name},
+                        "message": f"Application {app_name} lancée"
+                    }
+                except:
+                    return {
+                        "success": False,
+                        "error": f"Impossible de lancer {app_name}"
+                    }
+            
+            elif action.type == ActionType.WEB_NAVIGATION:
+                url = action.parameters.get("url", "")
+                import webbrowser
+                try:
+                    webbrowser.open(url)
+                    return {
+                        "success": True,
+                        "result": {"url": url},
+                        "message": f"Navigation vers {url}"
+                    }
+                except:
+                    return {
+                        "success": False,
+                        "error": f"Impossible d'ouvrir {url}"
+                    }
+            
+            # Actions par défaut
+            else:
+                return {
+                    "success": False,
+                    "error": f"Action {action.type.value} pas encore implémentée"
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur exécution action: {e}")
+            return {
+                "success": False,
+                "error": str(e)
             }
     
     async def take_screenshot(self) -> Optional[str]:

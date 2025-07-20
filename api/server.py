@@ -43,7 +43,7 @@ from autocomplete.suggestion_engine import SuggestionEngine
 # Modèles Pydantic pour l'API
 class CommandRequest(BaseModel):
     command: str = Field(..., description="Commande en langage naturel")
-    mode: str = Field(default="auto", description="Mode d'exécution: auto, plan, execute")
+    mode: str = Field(default="conversation", description="Mode d'exécution: conversation, plan, execute")
 
 class ActionExecutionRequest(BaseModel):
     sequence_id: str = Field(..., description="ID de la séquence à exécuter")
@@ -213,25 +213,54 @@ async def get_system_status():
 
 @app.post("/api/command")
 async def execute_command(request: CommandRequest, background_tasks: BackgroundTasks):
-    """Exécute une commande en langage naturel"""
+    """Exécute une commande en langage naturel avec support conversationnel"""
     try:
-        if not jarvis_modules.get("planner"):
-            raise HTTPException(status_code=503, detail="Module de planification non disponible")
+        global jarvis_agent
         
-        logger.info(f"🎯 Commande reçue: {request.command}")
+        if not jarvis_agent:
+            raise HTTPException(status_code=503, detail="Agent JARVIS non disponible")
         
-        # Planifier la commande
-        sequence = await jarvis_modules["planner"].parse_natural_command(request.command)
+        logger.info(f"🎯 Commande reçue: {request.command} (mode: {request.mode})")
         
-        if not sequence or not sequence.actions:
-            raise HTTPException(status_code=400, detail="Impossible de planifier cette commande")
+        # Mode conversation par défaut
+        if request.mode == "conversation":
+            result = await jarvis_agent.process_command(request.command, mode="conversation")
+            
+            # Diffuser la réponse via WebSocket
+            await websocket_manager.broadcast({
+                "type": "conversation_response",
+                "data": {
+                    "command": request.command,
+                    "response": result.get("response", ""),
+                    "action_executed": result.get("action_executed", False),
+                    "timestamp": datetime.now().isoformat()
+                }
+            })
+            
+            return {
+                "success": result.get("success", True),
+                "response": result.get("response", ""),
+                "action_executed": result.get("action_executed", False),
+                "timestamp": datetime.now().isoformat()
+            }
         
-        # Diffuser la planification via WebSocket
-        await websocket_manager.broadcast({
-            "type": "command_planned",
-            "data": {
-                "sequence_id": sequence.id,
-                "name": sequence.name,
+        # Mode legacy pour compatibilité
+        elif request.mode in ["plan", "execute"]:
+            if not jarvis_modules.get("planner"):
+                raise HTTPException(status_code=503, detail="Module de planification non disponible")
+            
+            # Planifier la commande
+            sequence = await jarvis_modules["planner"].parse_natural_command(request.command)
+            
+            if not sequence or not sequence.actions:
+                raise HTTPException(status_code=400, detail="Impossible de planifier cette commande")
+            
+            # Diffuser la planification via WebSocket
+            await websocket_manager.broadcast({
+                "type": "command_planned",
+                "data": {
+                    "sequence_id": sequence.id,
+                    "name": sequence.name,
                 "description": sequence.description,
                 "actions_count": len(sequence.actions),
                 "timestamp": datetime.now().isoformat()

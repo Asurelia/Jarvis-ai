@@ -746,8 +746,8 @@ class JarvisDemo:
                     await self._plan_command(command[5:])
                 
                 else:
-                    # Commande générale - essayer de la planifier et l'exécuter
-                    await self._execute_natural_command(command)
+                    # Commande conversationnelle naturelle
+                    await self._chat_naturally(command)
                 
             except KeyboardInterrupt:
                 logger.info("\n👋 Arrêt demandé par l'utilisateur")
@@ -892,8 +892,33 @@ Commandes naturelles:
         except Exception as e:
             logger.error(f"❌ Erreur planification: {e}")
     
+    async def _chat_naturally(self, command: str):
+        """Conversation naturelle avec JARVIS"""
+        try:
+            logger.info(f"💬 Conversation: {command}")
+            
+            # Utiliser l'agent pour traiter la conversation
+            result = await self.agent.process_command(command, mode="conversation")
+            
+            if result.get("success"):
+                response = result.get("response", "")
+                action_executed = result.get("action_executed", False)
+                
+                # Afficher la réponse de JARVIS
+                print(f"\n🤖 JARVIS: {response}")
+                
+                if action_executed:
+                    print("✅ J'ai exécuté l'action demandée.")
+                    
+            else:
+                print(f"❌ Erreur: {result.get('error', 'Erreur inconnue')}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur conversation: {e}")
+            print(f"❌ Désolé, j'ai rencontré un problème: {e}")
+    
     async def _execute_natural_command(self, command: str):
-        """Exécute une commande en langage naturel"""
+        """Exécute une commande en langage naturel (legacy)"""
         try:
             logger.info(f"🎯 Exécution de la commande: {command}")
             
