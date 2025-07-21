@@ -1,5 +1,5 @@
-# 🤖 JARVIS v2.0 - Architecture Microservices Docker
-# Infrastructure moderne pour performance x3-x4
+# 🤖 JARVIS v2.0 - Architecture Microservices Docker Sécurisée
+# Infrastructure moderne pour performance x3-x4 avec sécurité renforcée
 
 networks:
   jarvis_network:
@@ -7,12 +7,55 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
+  
+  # Réseau isolé pour les services sensibles
+  jarvis_secure:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
 
 volumes:
   brain_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/brain"
   memory_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/memory"
   ollama_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/ollama"
   audio_cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/audio"
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/redis"
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/postgres"
 
 services:
   # 🧠 Brain API - Cerveau central M.A.MM
@@ -22,29 +65,46 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis_brain
     ports:
-      - "8080:8080"
-      - "8081:8081"  # WebSocket
+      - "127.0.0.1:5000:5000"  # API principale
+      - "127.0.0.1:5001:5001"  # WebSocket
     environment:
       - NODE_ENV=production
-      - BRAIN_DEBUG=true
+      - BRAIN_DEBUG=false
       - REDIS_URL=redis://redis:6379
-      - MEMORY_DB_URL=postgresql://jarvis:jarvis123@memory-db:5432/jarvis_memory
+      - MEMORY_DB_URL=postgresql://jarvis:${POSTGRES_PASSWORD:-jarvis2025!}@memory-db:5432/jarvis_memory
       - OLLAMA_URL=http://ollama:11434
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
     volumes:
-      - brain_data:/app/data
-      - ./logs:/app/logs
+      - brain_data:/app/data:rw
+      - ./logs:/app/logs:rw
     networks:
       jarvis_network:
         ipv4_address: 172.20.0.10
     depends_on:
-      - redis
-      - memory-db
+      redis:
+        condition: service_healthy
+      memory-db:
+        condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    user: "1000:1000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
 
   # 🗣️ TTS Service - Coqui.ai Streaming
   tts-service:

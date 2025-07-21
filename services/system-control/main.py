@@ -367,10 +367,191 @@ class ClipboardSetRequest(BaseModel):
 class WindowFocusRequest(BaseModel):
     title: str = Field(..., min_length=1)
 
+# Configuration JWT
+import jwt
+from datetime import datetime, timedelta
+import secrets
+
+# Clé secrète pour JWT (à générer de manière sécurisée en production)
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
+
+# Liste des tokens révoqués (en production, utiliser Redis)
+revoked_tokens = set()
+
+class JWTError(Exception):
+    pass
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """Créer un token JWT"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    
+    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+def verify_jwt_token(token: str) -> Dict[str, Any]:
+    """Vérifier et décoder un token JWT"""
+    try:
+        # Vérifier si le token est révoqué
+        if token in revoked_tokens:
+            raise JWTError("Token révoqué")
+        
+        # Décoder le token
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        
+        # Vérifications supplémentaires
+        if "exp" not in payload:
+            raise JWTError("Token sans expiration")
+        
+        if datetime.utcnow() > datetime.fromtimestamp(payload["exp"]):
+            raise JWTError("Token expiré")
+        
+        return payload
+    
+    except jwt.ExpiredSignatureError:
+        raise JWTError("Token expiré")
+    except jwt.InvalidTokenError:
+        raise JWTError("Token invalide")
+    except Exception as e:
+        raise JWTError(f"Erreur validation token: {str(e)}")
+
 # Middleware de sécurité
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    # TODO: Implémenter vérification JWT
-    return True
+    """Vérification d'authentification JWT avec sécurité renforcée"""
+    if not credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="Token d'authentification requis",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    try:
+        # Extraire le token
+        token = credentials.credentials
+        
+        # Vérifier le token
+        payload = verify_jwt_token(token)
+        
+        # Vérifications de sécurité supplémentaires
+        required_fields = ["sub", "permissions", "iat"]
+        for field in required_fields:
+            if field not in payload:
+                raise JWTError(f"Champ requis manquant: {field}")
+        
+        # Vérifier les permissions pour le contrôle système
+        permissions = payload.get("permissions", [])
+        if "system_control" not in permissions:
+            raise HTTPException(
+                status_code=403,
+                detail="Permissions insuffisantes pour le contrôle système"
+            )
+        
+        # Log de l'accès (sans les données sensibles)
+        logger.info(f"Accès autorisé - Utilisateur: {payload.get('sub')} - Permissions: {permissions}")
+        
+        return {
+            "user_id": payload.get("sub"),
+            "permissions": permissions,
+            "token_issued": payload.get("iat")
+        }
+    
+    except JWTError as e:
+        logger.warning(f"Échec authentification JWT: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail=f"Authentification échouée: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    except Exception as e:
+        logger.error(f"Erreur verification token: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Erreur interne d'authentification"
+        )
+
+# Modèles pour l'authentification
+class AuthRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=8)
+    permissions: Optional[List[str]] = Field(default=["system_control"])
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    permissions: List[str]
+
+# Routes d'authentification
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(auth_request: AuthRequest):
+    """Authentification et génération de token JWT"""
+    # Vérification des credentials (simplifié pour démo - à sécuriser en production)
+    # En production: vérifier contre une base de données avec hash bcrypt
+    valid_users = {
+        "jarvis": "jarvis2025!",  # À remplacer par un système sécurisé
+        "admin": os.getenv("ADMIN_PASSWORD", "admin2025!")
+    }
+    
+    if (auth_request.username not in valid_users or 
+        auth_request.password != valid_users[auth_request.username]):
+        raise HTTPException(
+            status_code=401,
+            detail="Identifiants invalides"
+        )
+    
+    # Vérifier les permissions demandées
+    allowed_permissions = ["system_control", "mouse", "keyboard", "clipboard", "window"]
+    requested_permissions = auth_request.permissions or ["system_control"]
+    
+    for perm in requested_permissions:
+        if perm not in allowed_permissions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Permission non autorisée: {perm}"
+            )
+    
+    # Créer le token
+    token_data = {
+        "sub": auth_request.username,
+        "permissions": requested_permissions,
+        "type": "access_token"
+    }
+    
+    expires_delta = timedelta(hours=JWT_EXPIRATION_HOURS)
+    access_token = create_access_token(data=token_data, expires_delta=expires_delta)
+    
+    logger.info(f"Token généré pour {auth_request.username} avec permissions {requested_permissions}")
+    
+    return TokenResponse(
+        access_token=access_token,
+        expires_in=JWT_EXPIRATION_HOURS * 3600,
+        permissions=requested_permissions
+    )
+
+@app.post("/auth/revoke")
+async def revoke_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Révoquer un token JWT"""
+    token = credentials.credentials
+    revoked_tokens.add(token)
+    
+    logger.info("Token révoqué")
+    return {"message": "Token révoqué avec succès"}
+
+@app.get("/auth/verify")
+async def verify_current_token(user_data: dict = Depends(verify_token)):
+    """Vérifier le token actuel"""
+    return {
+        "valid": True,
+        "user_id": user_data["user_id"],
+        "permissions": user_data["permissions"],
+        "token_issued": user_data["token_issued"]
+    }
 
 # Routes API
 @app.get("/health")
@@ -383,7 +564,8 @@ async def health_check():
         "sandbox_mode": SANDBOX_MODE,
         "emergency_stop": security_manager.emergency_stop,
         "screen_size": controller.screen_size,
-        "timestamp": time.time()
+        "timestamp": time.time(),
+        "authentication": "JWT enabled"
     }
 
 @app.post("/mouse/move")
