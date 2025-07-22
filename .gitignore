@@ -107,4 +107,4 @@ coverage.xml
 # Windows specific
 *.exe
 *.msi
-*.lnk
+*.lnkservices/redis/data/
