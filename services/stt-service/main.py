@@ -23,7 +23,23 @@ from loguru import logger
 
 # Configuration
 MODEL_NAME = os.getenv("STT_MODEL", "base")
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+def get_optimal_device():
+    """Détection GPU optimale AMD/NVIDIA"""
+    if torch.cuda.is_available():
+        try:
+            device_name = torch.cuda.get_device_name(0)
+            if 'AMD' in device_name or 'Radeon' in device_name:
+                logger.info("🔴 GPU AMD détecté pour STT")
+                return "cuda"  # ROCm utilise l'API CUDA
+            elif 'NVIDIA' in device_name:
+                logger.info("🟢 GPU NVIDIA détecté pour STT")
+                return "cuda"
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur détection GPU: {e}")
+        return "cuda"
+    return "cpu"
+
+DEVICE = get_optimal_device()
 SAMPLE_RATE = 16000
 CHUNK_LENGTH = 30  # seconds
 
@@ -59,7 +75,7 @@ class STTService:
             options = {
                 "language": language,
                 "task": "transcribe",
-                "fp16": DEVICE == "cuda",
+                "fp16": DEVICE == "cuda" and 'AMD' not in torch.cuda.get_device_name(0) if DEVICE == "cuda" else False,
                 "verbose": False
             }
             

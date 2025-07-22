@@ -1,0 +1,105 @@
+# 🔴 Docker Compose override pour GPU AMD
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.amd.yml up
+
+version: '3.8'
+
+services:
+  # Brain API avec GPU AMD
+  brain-api:
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - HIP_VISIBLE_DEVICES=0
+      - ROCM_VERSION=5.6
+      - AMD_GPU_ENABLED=true
+      - GPU_MEMORY_FRACTION=0.8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: amd.com/gpu
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - /opt/rocm:/opt/rocm:ro  # ROCm runtime
+
+  # STT Service avec GPU AMD  
+  stt-service:
+    environment:
+      - GPU_ENABLED=true
+      - DEVICE=cuda  # ROCm utilise API CUDA
+      - PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:128
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: amd.com/gpu
+              capabilities: [gpu]
+        limits:
+          memory: 4G
+
+  # TTS Service avec GPU AMD
+  tts-service:
+    environment:
+      - TTS_GPU_ENABLED=true
+      - CUDA_VISIBLE_DEVICES=0
+      - HIP_VISIBLE_DEVICES=0
+      - AMD_OPTIMIZE=true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: amd.com/gpu
+              capabilities: [gpu]
+        limits:
+          memory: 3G
+
+  # Ollama avec optimisations AMD
+  ollama:
+    environment:
+      - OLLAMA_GPU_LAYERS=35
+      - ROCM_VERSION=5.6
+      - OLLAMA_NUM_GPU=1
+      - HIP_VISIBLE_DEVICES=0
+      - OLLAMA_ORIGINS="*"
+      - OLLAMA_AMD_OPTIMIZE=true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: amd.com/gpu
+              count: 1
+              capabilities: [gpu, compute]
+        limits:
+          memory: 8G
+    volumes:
+      - /dev/dri:/dev/dri  # GPU access
+      - /opt/rocm:/opt/rocm:ro
+
+  # Interface UI avec variables AMD
+  ui:
+    environment:
+      - REACT_APP_AMD_GPU_ENABLED=true
+      - REACT_APP_FORCE_AMD_OPTIMIZATION=true
+      - REACT_APP_GPU_QUALITY_LEVEL=4
+
+  # Redis avec optimisations mémoire AMD  
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # PostgreSQL optimisé pour GPU AMD
+  postgres:
+    environment:
+      - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements,auto_explain
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=2GB  # Adapter selon RAM
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G

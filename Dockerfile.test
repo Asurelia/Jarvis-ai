@@ -1,0 +1,84 @@
+# 🧪 Dockerfile pour l'environnement de test JARVIS
+FROM python:3.11-slim
+
+# Métadonnées
+LABEL maintainer="JARVIS Team"
+LABEL description="Environnement de test automatisé pour JARVIS AI"
+LABEL version="1.0.0"
+
+# Variables d'environnement
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
+ENV NODE_VERSION=18
+
+# Installation des dépendances système
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    build-essential \
+    pkg-config \
+    libasound2-dev \
+    portaudio19-dev \
+    ffmpeg \
+    nodejs \
+    npm \
+    postgresql-client \
+    redis-tools \
+    xvfb \
+    chromium \
+    chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installation de Chrome pour les tests Playwright
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+
+# Création du répertoire de travail
+WORKDIR /app
+
+# Copie des requirements
+COPY requirements.txt .
+COPY tests/requirements-test.txt tests/
+
+# Installation des dépendances Python
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r tests/requirements-test.txt
+
+# Installation des dépendances Node.js pour les tests UI
+COPY ui/package*.json ui/
+RUN cd ui && npm ci --only=dev
+
+# Installation de Playwright
+RUN npx playwright install chromium firefox webkit \
+    && npx playwright install-deps
+
+# Copie du code source
+COPY . .
+
+# Création des répertoires nécessaires
+RUN mkdir -p /app/logs /app/coverage /app/test-results /app/screenshots
+
+# Script d'initialisation des tests
+COPY tests/scripts/init-tests.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/init-tests.sh
+
+# Configuration des permissions
+RUN chmod -R 755 /app/tests \
+    && chmod +x /app/tests/scripts/*.sh
+
+# Port pour le serveur de test (optionnel)
+EXPOSE 8080
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Point d'entrée par défaut
+ENTRYPOINT ["/usr/local/bin/init-tests.sh"]
+CMD ["python", "-m", "pytest", "tests/", "-v"]

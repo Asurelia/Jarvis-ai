@@ -1,0 +1,395 @@
+# 🧪 Configuration Docker Compose pour les Tests d'Intégration JARVIS
+# Environnement de test isolé avec tous les services nécessaires
+
+version: '3.8'
+
+networks:
+  jarvis-test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  test-redis-data:
+  test-memory-db:
+  test-logs:
+
+services:
+  # 🧠 Service Principal - Brain API (Test)
+  brain-api-test:
+    build:
+      context: ./services/brain-api
+      dockerfile: Dockerfile
+    container_name: jarvis-brain-test
+    environment:
+      - NODE_ENV=test
+      - REDIS_URL=redis://test-redis:6379
+      - MEMORY_DB_URL=postgresql://postgres:test123@test-memory-db:5432/jarvis_test
+      - OLLAMA_URL=http://test-ollama:11434
+      - LOG_LEVEL=debug
+      - TEST_MODE=true
+    ports:
+      - "8081:8080"  # Port différent pour les tests
+    depends_on:
+      - test-redis
+      - test-memory-db
+      - test-ollama
+    networks:
+      - jarvis-test-network
+    volumes:
+      - test-logs:/app/logs
+      - ./tests:/app/tests:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    command: ["python", "main.py", "--test-mode"]
+
+  # 🗄️ Base de Données Test
+  test-memory-db:
+    image: postgres:15-alpine
+    container_name: jarvis-db-test
+    environment:
+      POSTGRES_DB: jarvis_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5433:5432"  # Port différent pour les tests
+    volumes:
+      - test-memory-db:/var/lib/postgresql/data
+      - ./services/memory-db/init:/docker-entrypoint-initdb.d:ro
+      - ./tests/sql:/test-sql:ro
+    networks:
+      - jarvis-test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jarvis_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 🔴 Cache Redis Test
+  test-redis:
+    image: redis:7-alpine
+    container_name: jarvis-redis-test
+    ports:
+      - "6380:6379"  # Port différent pour les tests
+    volumes:
+      - test-redis-data:/data
+    networks:
+      - jarvis-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    command: ["redis-server", "--save", "", "--appendonly", "no"]  # Pas de persistance en test
+
+  # 🤖 Service Ollama Test (Version légère)
+  test-ollama:
+    image: ollama/ollama:latest
+    container_name: jarvis-ollama-test
+    ports:
+      - "11435:11434"  # Port différent pour les tests
+    environment:
+      - OLLAMA_DEBUG=1
+      - OLLAMA_MODELS=/usr/share/ollama/.ollama/models
+    volumes:
+      - ./models/test:/usr/share/ollama/.ollama/models
+    networks:
+      - jarvis-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G  # Limite pour les tests
+
+  # 🎙️ Service STT Test
+  stt-service-test:
+    build:
+      context: ./services/stt-service
+      dockerfile: Dockerfile
+    container_name: jarvis-stt-test
+    environment:
+      - MODEL_SIZE=tiny  # Modèle le plus petit pour les tests
+      - CACHE_DIR=/app/cache
+      - TEST_MODE=true
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./cache:/app/cache
+      - ./tests/audio:/test-audio:ro
+    networks:
+      - jarvis-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 🔊 Service TTS Test
+  tts-service-test:
+    build:
+      context: ./services/tts-service
+      dockerfile: Dockerfile
+    container_name: jarvis-tts-test
+    environment:
+      - VOICE=echo  # Voix simple pour les tests
+      - CACHE_ENABLED=false
+      - TEST_MODE=true
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./tests/audio:/test-audio:rw
+    networks:
+      - jarvis-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 🎮 Service Contrôle Système Test
+  system-control-test:
+    build:
+      context: ./services/system-control
+      dockerfile: Dockerfile
+    container_name: jarvis-control-test
+    environment:
+      - SANDBOX_MODE=true  # Mode bac à sable pour les tests
+      - LOG_LEVEL=debug
+    ports:
+      - "8084:8080"
+    volumes:
+      - ./tests/control:/test-control:ro
+    networks:
+      - jarvis-test-network
+    privileged: false  # Pas de privilèges en mode test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 💻 Service Terminal Test
+  terminal-service-test:
+    build:
+      context: ./services/terminal-service
+      dockerfile: Dockerfile
+    container_name: jarvis-terminal-test
+    environment:
+      - RESTRICTED_MODE=true  # Mode restreint pour les tests
+      - ALLOWED_COMMANDS=echo,ls,pwd,cat
+      - TEST_MODE=true
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./tests/terminal:/test-terminal:ro
+    networks:
+      - jarvis-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 🌐 Interface UI Test
+  ui-test:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.prod
+      args:
+        - NODE_ENV=test
+    container_name: jarvis-ui-test
+    environment:
+      - REACT_APP_API_URL=http://brain-api-test:8080
+      - REACT_APP_WS_URL=ws://brain-api-test:8080/ws
+      - REACT_APP_TEST_MODE=true
+      - GENERATE_SOURCEMAP=false
+    ports:
+      - "3001:80"  # Port différent pour les tests
+    depends_on:
+      - brain-api-test
+    networks:
+      - jarvis-test-network
+    volumes:
+      - ./tests/ui:/usr/share/nginx/html/tests:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 🧪 Runner de Tests Principal
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: jarvis-test-runner
+    environment:
+      - PYTHONPATH=/app
+      - TEST_DATABASE_URL=postgresql://postgres:test123@test-memory-db:5432/jarvis_test
+      - TEST_REDIS_URL=redis://test-redis:6379
+      - TEST_API_URL=http://brain-api-test:8080
+      - TEST_UI_URL=http://ui-test:80
+      - PYTEST_ARGS=--verbose --tb=short --color=yes
+    depends_on:
+      brain-api-test:
+        condition: service_healthy
+      test-memory-db:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+      ui-test:
+        condition: service_healthy
+    networks:
+      - jarvis-test-network
+    volumes:
+      - .:/app:ro
+      - test-logs:/app/logs
+      - ./tests:/app/tests:rw
+      - ./coverage:/app/coverage:rw
+    working_dir: /app
+    command: ["python", "-m", "pytest", "tests/", "-v", "--cov=.", "--cov-report=html:/app/coverage"]
+
+  # 📊 Tests de Performance
+  performance-test:
+    image: loadimpact/k6:latest
+    container_name: jarvis-perf-test
+    environment:
+      - K6_WEB_DASHBOARD=true
+      - K6_WEB_DASHBOARD_PORT=5665
+    ports:
+      - "5665:5665"
+    depends_on:
+      - brain-api-test
+      - ui-test
+    networks:
+      - jarvis-test-network
+    volumes:
+      - ./tests/performance:/scripts:ro
+      - ./tests/results:/results:rw
+    command: ["run", "--out", "json=/results/performance.json", "/scripts/load_test.js"]
+
+  # 🔍 Tests de Sécurité
+  security-test:
+    image: owasp/zap2docker-stable
+    container_name: jarvis-security-test
+    depends_on:
+      - ui-test
+      - brain-api-test
+    networks:
+      - jarvis-test-network
+    volumes:
+      - ./tests/security:/zap/wrk:rw
+    command: [
+      "zap-baseline.py",
+      "-t", "http://ui-test:80",
+      "-J", "/zap/wrk/security-report.json",
+      "-r", "/zap/wrk/security-report.html"
+    ]
+
+  # 🎯 Tests E2E avec Playwright
+  e2e-test:
+    build:
+      context: ./tests/e2e
+      dockerfile: Dockerfile
+    container_name: jarvis-e2e-test
+    environment:
+      - BASE_URL=http://ui-test:80
+      - API_URL=http://brain-api-test:8080
+      - HEADLESS=true
+      - BROWSER=chromium
+    depends_on:
+      ui-test:
+        condition: service_healthy
+    networks:
+      - jarvis-test-network
+    volumes:
+      - ./tests/e2e:/app/tests:ro
+      - ./tests/results/e2e:/app/test-results:rw
+    command: ["npx", "playwright", "test", "--reporter=html"]
+
+  # 📈 Monitoring des Tests
+  test-monitoring:
+    image: prom/prometheus:latest
+    container_name: jarvis-test-monitoring
+    ports:
+      - "9091:9090"
+    networks:
+      - jarvis-test-network
+    volumes:
+      - ./monitoring/prometheus-test.yml:/etc/prometheus/prometheus.yml:ro
+      - ./tests/metrics:/prometheus/metrics:rw
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=1h'  # Rétention courte pour les tests
+
+  # 📊 Visualisation des Métriques de Test
+  test-grafana:
+    image: grafana/grafana:latest
+    container_name: jarvis-test-grafana
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=test123
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    depends_on:
+      - test-monitoring
+    networks:
+      - jarvis-test-network
+    volumes:
+      - ./monitoring/grafana/dashboards-test:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources-test:/etc/grafana/provisioning/datasources:ro
+
+  # 🧹 Service de Nettoyage Post-Test
+  test-cleanup:
+    image: alpine:latest
+    container_name: jarvis-test-cleanup
+    networks:
+      - jarvis-test-network
+    volumes:
+      - test-redis-data:/cleanup/redis:rw
+      - test-memory-db:/cleanup/db:rw
+      - test-logs:/cleanup/logs:rw
+    command: [
+      "sh", "-c",
+      "echo 'Nettoyage des données de test...'; 
+       rm -rf /cleanup/redis/* /cleanup/logs/*;
+       echo 'Nettoyage terminé';"
+    ]
+    profiles: ["cleanup"]
+
+# 🚀 Profils pour différents types de tests
+profiles:
+  # Tests unitaires uniquement
+  unit-tests:
+    services: [test-runner, test-memory-db, test-redis]
+  
+  # Tests d'intégration
+  integration-tests:
+    services: [brain-api-test, test-memory-db, test-redis, test-runner]
+  
+  # Tests E2E complets
+  full-tests:
+    services: [
+      brain-api-test, test-memory-db, test-redis, test-ollama,
+      stt-service-test, tts-service-test, ui-test, e2e-test
+    ]
+  
+  # Tests de performance
+  perf-tests:
+    services: [brain-api-test, ui-test, performance-test, test-monitoring]
+  
+  # Tests de sécurité
+  security-tests:
+    services: [ui-test, brain-api-test, security-test]

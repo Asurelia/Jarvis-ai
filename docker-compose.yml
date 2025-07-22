@@ -1,5 +1,6 @@
 # 🤖 JARVIS v2.0 - Architecture Microservices Docker Sécurisée
 # Infrastructure moderne pour performance x3-x4 avec sécurité renforcée
+# 🔴 Optimisé pour GPU AMD et compatibilité multi-GPU
 
 networks:
   jarvis_network:
