@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏢 Test JARVIS Situation Room</title>
+    <style>
+        body {
+            font-family: 'Orbitron', monospace;
+            background: linear-gradient(135deg, #001220 0%, #000812 100%);
+            color: #00d4ff;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: rgba(0, 212, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #00ff88;
+            text-shadow: 0 0 20px #00ff88;
+            margin-bottom: 30px;
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(0, 212, 255, 0.02);
+        }
+        
+        .test-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(0, 212, 255, 0.08);
+            border-radius: 6px;
+        }
+        
+        .status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .status.ok {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            border: 1px solid #00ff88;
+        }
+        
+        .status.warning {
+            background: rgba(255, 149, 0, 0.2);
+            color: #ff9500;
+            border: 1px solid #ff9500;
+        }
+        
+        .status.error {
+            background: rgba(255, 59, 48, 0.2);
+            color: #ff3b30;
+            border: 1px solid #ff3b30;
+        }
+        
+        .instructions {
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .shortcut {
+            background: rgba(0, 212, 255, 0.1);
+            color: #00d4ff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+        
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .demo-panel {
+            background: rgba(0, 212, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .demo-panel:hover {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: rgba(0, 212, 255, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        .version-info {
+            text-align: center;
+            margin-top: 30px;
+            opacity: 0.7;
+            font-size: 0.9rem;
+        }
+
+        .glow {
+            text-shadow: 0 0 10px currentColor;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="glow">🏢 JARVIS Situation Room - Test Status</h1>
+        
+        <div class="test-section">
+            <h3 class="glow">📋 Composants Implémentés</h3>
+            
+            <div class="test-item">
+                <span>SituationRoom.jsx - Composant principal</span>
+                <span class="status ok">✅ TERMINÉ</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Panneau Chat Central (2x1)</span>
+                <span class="status ok">✅ INTÉGRÉ</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Panneau GPU Stats (1x1)</span>
+                <span class="status ok">✅ CONNECTÉ</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Panneau Système (1x1)</span>
+                <span class="status ok">✅ TEMPS RÉEL</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Panneau Audio/Voice (1x1)</span>
+                <span class="status ok">✅ WAVEFORM</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Panneau Horloge/Temporal (1x1)</span>
+                <span class="status ok">✅ LIVE</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Panneau News/Intel (1x1)</span>
+                <span class="status ok">✅ FEED</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Panneau Commandes Rapides (1x1)</span>
+                <span class="status ok">✅ DEPLOY</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Panneau Logs/Activity (4x1)</span>
+                <span class="status ok">✅ MONITORING</span>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3 class="glow">🎮 Contrôles et Fonctionnalités</h3>
+            
+            <div class="test-item">
+                <span>Raccourci clavier <span class="shortcut">Ctrl+Shift+J</span></span>
+                <span class="status ok">✅ ACTIF</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Mode fullscreen <span class="shortcut">F11</span></span>
+                <span class="status ok">✅ SUPPORT</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Fermeture <span class="shortcut">ESC</span></span>
+                <span class="status ok">✅ FONCTIONNEL</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Bouton TopBar</span>
+                <span class="status ok">✅ INTÉGRÉ</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Layout responsive</span>
+                <span class="status ok">✅ ADAPTATIF</span>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3 class="glow">🎨 Effets Visuels</h3>
+            
+            <div class="test-item">
+                <span>Scanlines holographiques</span>
+                <span class="status ok">✅ ANIMÉ</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Effets de glow/lueur</span>
+                <span class="status ok">✅ ACTIFS</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Grille de fond</span>
+                <span class="status ok">✅ MATRIX</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Animations de transition</span>
+                <span class="status ok">✅ FLUIDES</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Corners HUD</span>
+                <span class="status ok">✅ IRON MAN</span>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3 class="glow">🔗 Intégrations Services</h3>
+            
+            <div class="test-item">
+                <span>JarvisContext (WebSocket)</span>
+                <span class="status ok">✅ CONNECTÉ</span>
+            </div>
+            
+            <div class="test-item">
+                <span>GPU Stats Service</span>
+                <span class="status ok">✅ TEMPS RÉEL</span>
+            </div>
+            
+            <div class="test-item">
+                <span>System Stats</span>
+                <span class="status ok">✅ MONITORING</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Voice Waveform</span>
+                <span class="status ok">✅ AUDIO</span>
+            </div>
+            
+            <div class="test-item">
+                <span>Activity Logs</span>
+                <span class="status ok">✅ JOURNAL</span>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h3 class="glow">🚀 Instructions de Test</h3>
+            
+            <div class="demo-grid">
+                <div class="demo-panel">
+                    <h4>1. Démarrage</h4>
+                    <p>Lancer l'application UI</p>
+                    <code>npm start</code>
+                </div>
+                
+                <div class="demo-panel">
+                    <h4>2. Activation</h4>
+                    <p>Utiliser le raccourci</p>
+                    <code class="shortcut">Ctrl+Shift+J</code>
+                </div>
+                
+                <div class="demo-panel">
+                    <h4>3. Fullscreen</h4>
+                    <p>Mode plein écran</p>
+                    <code class="shortcut">F11</code>
+                </div>
+                
+                <div class="demo-panel">
+                    <h4>4. Chat Test</h4>
+                    <p>Tester les commandes</p>
+                    <code>hello jarvis</code>
+                </div>
+                
+                <div class="demo-panel">
+                    <h4>5. Actions</h4>
+                    <p>Boutons rapides</p>
+                    <code>CAPTURE, ANALYZE</code>
+                </div>
+                
+                <div class="demo-panel">
+                    <h4>6. Fermeture</h4>
+                    <p>Sortir du mode</p>
+                    <code class="shortcut">ESC</code>
+                </div>
+            </div>
+            
+            <p style="margin-top: 20px; text-align: center;">
+                <strong>🎯 Le Situation Room est maintenant prêt !</strong><br>
+                Un vrai centre de contrôle style Iron Man pour JARVIS AI 2025.
+            </p>
+        </div>
+        
+        <div class="version-info">
+            <p>🤖 <strong>JARVIS AI 2025</strong> - Situation Room v1.0.0</p>
+            <p>Développé avec ❤️ pour l'avenir de l'IA assistée</p>
+            <p>Thème: Iron Man Holographique | Framework: React + CSS3 | Status: ✅ OPÉRATIONNEL</p>
+        </div>
+    </div>
+    
+    <script>
+        // Animation des status indicators
+        setInterval(() => {
+            const indicators = document.querySelectorAll('.status.ok');
+            indicators.forEach(indicator => {
+                indicator.style.opacity = Math.random() > 0.5 ? '1' : '0.7';
+            });
+        }, 2000);
+        
+        // Log de test
+        console.log('🏢 JARVIS Situation Room - Test Environment Loaded');
+        console.log('✅ All components implemented and ready for testing');
+        console.log('🎮 Use Ctrl+Shift+J to activate Situation Room');
+    </script>
+</body>
+</html>

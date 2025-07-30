@@ -13,6 +13,9 @@ from TTS.api import TTS
 import soundfile as sf
 import io
 import time
+import sys
+sys.path.append('/app')
+from presets.preset_manager import preset_manager
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +117,9 @@ class TTSEngine:
         voice_id: str = "default",
         language: str = "fr",
         speed: float = 1.0,
-        pitch: float = 1.0
+        pitch: float = 1.0,
+        preset_name: Optional[str] = None,
+        context: Optional[str] = None
     ) -> bytes:
         """
         Synthétiser du texte en audio
@@ -125,6 +130,8 @@ class TTSEngine:
             language: Langue du texte
             speed: Vitesse de parole (0.5-2.0)
             pitch: Hauteur de voix (0.5-2.0)
+            preset_name: Nom du preset vocal à utiliser (Jarvis, etc.)
+            context: Contexte pour amélioration du texte
             
         Returns:
             bytes: Audio WAV en bytes
@@ -133,6 +140,21 @@ class TTSEngine:
             raise RuntimeError("Modèle TTS non chargé")
         
         try:
+            # Amélioration du texte avec preset si fourni
+            if preset_name:
+                text = preset_manager.enhance_text_with_preset(text, preset_name, context)
+                
+                # Appliquer les paramètres du preset
+                preset_config = preset_manager.apply_preset_to_voice_config(
+                    preset_name, 
+                    {"voice_id": voice_id, "language": language, "speed": speed, "pitch": pitch}
+                )
+                
+                # Utiliser les paramètres du preset
+                speed = preset_config.get('speed', speed)
+                pitch = preset_config.get('pitch', pitch)
+                language = preset_config.get('language', language)
+            
             # Anti-hallucination
             if self.enable_anti_hallucination:
                 text = self._remove_hallucinations(text)
@@ -147,12 +169,23 @@ class TTSEngine:
                 speed
             )
             
+            # Récupérer les effets audio du preset
+            preset_effects = None
+            if preset_name:
+                preset = preset_manager.get_preset(preset_name)
+                if preset and hasattr(preset, 'get_audio_effects'):
+                    preset_effects = preset.get_audio_effects()
+            
             # Post-traitement pitch si nécessaire
             if pitch != 1.0:
                 audio_array = self._adjust_pitch(audio_array, pitch)
             
             # Convertir en WAV bytes
             audio_bytes = self._array_to_wav_bytes(audio_array)
+            
+            # Retourner avec métadonnées d'effets si preset utilisé
+            if preset_effects:
+                return (audio_bytes, preset_effects)
             
             return audio_bytes
             
@@ -218,7 +251,8 @@ class TTSEngine:
         buffer = io.BytesIO()
         
         # Normaliser l'audio
-        audio_array = audio_array / np.max(np.abs(audio_array))
+        if np.max(np.abs(audio_array)) > 0:
+            audio_array = audio_array / np.max(np.abs(audio_array))
         
         # Écrire en WAV
         sf.write(

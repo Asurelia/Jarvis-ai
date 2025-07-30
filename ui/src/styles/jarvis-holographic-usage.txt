@@ -1,0 +1,65 @@
+JARVIS Holographic Interface - Guide d'utilisation
+=================================================
+
+Cette interface holographique style Iron Man a été créée pour donner à JARVIS AI une apparence futuriste et immersive.
+
+FICHIERS CRÉÉS :
+---------------
+1. jarvis-holographic.css - Feuille de style complète avec animations et effets
+2. JarvisInterface.jsx - Composant React réutilisable
+3. JarvisInterfaceDemo.js - Page de démonstration
+
+INTÉGRATION DANS MAINCHAT.JS :
+-----------------------------
+- Import du CSS holographique ajouté
+- Classes CSS appliquées aux éléments principaux
+- Titre JARVIS avec effet glitch ajouté
+- Coins HUD animés intégrés
+- Particules flottantes implémentées
+- Tous les boutons et chips stylisés en holographique
+- Police Orbitron appliquée partout
+
+COULEURS UTILISÉES :
+-------------------
+--jarvis-primary: #00d4ff (Bleu cyan - couleur principale)
+--jarvis-secondary: #00ff88 (Vert néon - couleur secondaire)
+--jarvis-accent: #ff6b00 (Orange - accents)
+--jarvis-warning: #ff9500 (Orange clair - avertissements)
+--jarvis-error: #ff3b30 (Rouge - erreurs)
+--jarvis-success: #00ff88 (Vert - succès)
+
+EFFETS VISUELS :
+---------------
+- Grille holographique animée en arrière-plan
+- Effet de scan vertical sur les panneaux
+- Pulsation douce des bordures lumineuses
+- Effet glitch sur le titre principal
+- Particules flottantes animées
+- Coins HUD avec animations de scan
+- Effet de vague au clic sur les boutons
+- Backdrop-filter blur pour transparence
+
+CLASSES CSS PRINCIPALES :
+------------------------
+.jarvis-holographic-container - Conteneur principal avec fond holographique
+.jarvis-interface - Interface principale avec police Orbitron
+.jarvis-panel - Panneaux avec bordures lumineuses et effet de scan
+.jarvis-text-glow - Texte avec effet de lueur
+.jarvis-title - Titre principal avec animation
+.jarvis-button - Boutons holographiques avec effets
+.jarvis-input - Champs de saisie stylisés
+.jarvis-message - Messages de chat holographiques
+.jarvis-hud-corner - Coins HUD animés
+
+UTILISATION DU COMPOSANT JarvisInterface :
+-----------------------------------------
+import JarvisInterface from './components/JarvisInterface';
+
+<JarvisInterface 
+  messages={[/* tableau de messages */]}
+  onSendMessage={(message) => {/* gestionnaire d'envoi */}}
+>
+  {/* Contenu optionnel */}
+</JarvisInterface>
+
+L'interface est maintenant complètement transformée avec un style holographique futuriste digne d'Iron Man !

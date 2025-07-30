@@ -27,6 +27,7 @@ from core.audio_processor import AudioProcessor
 from core.stream_manager import StreamManager
 from utils.config import settings
 from utils.monitoring import setup_metrics, record_tts_request
+from presets.preset_manager import preset_manager
 
 # Configuration logging structuré
 structlog.configure(
@@ -158,6 +159,13 @@ class TTSRequest(BaseModel):
     speed: Optional[float] = 1.0
     pitch: Optional[float] = 1.0
     streaming: Optional[bool] = True
+    preset_name: Optional[str] = None
+    context: Optional[str] = None
+
+class JarvisRequest(BaseModel):
+    text: str
+    context: Optional[str] = None
+    phrase_category: Optional[str] = None  # greetings, confirmations, etc.
 
 class VoiceCloneRequest(BaseModel):
     name: str
@@ -184,6 +192,9 @@ async def root():
             "synthesize": "/api/synthesize",
             "stream": "/api/stream",
             "voices": "/api/voices",
+            "jarvis": "/api/tts/jarvis",
+            "presets": "/api/presets",
+            "jarvis_phrases": "/api/jarvis/phrases",
             "websocket": "/ws",
             "metrics": "/metrics",
             "docs": "/docs"
@@ -217,19 +228,29 @@ async def synthesize_speech(request: TTSRequest):
         start_time = time.time()
         
         # Synthétiser l'audio
-        audio_data = await app_state["tts_engine"].synthesize(
+        synthesis_result = await app_state["tts_engine"].synthesize(
             text=request.text,
             voice_id=request.voice_id,
             language=request.language,
             speed=request.speed,
-            pitch=request.pitch
+            pitch=request.pitch,
+            preset_name=request.preset_name,
+            context=request.context
         )
+        
+        # Gérer le résultat (peut être tuple avec effets ou juste bytes)
+        if isinstance(synthesis_result, tuple):
+            audio_data, preset_effects = synthesis_result
+        else:
+            audio_data = synthesis_result
+            preset_effects = None
         
         # Traiter l'audio
         processed_audio = await app_state["audio_processor"].process(
             audio_data,
             normalize=True,
-            remove_silence=True
+            remove_silence=True,
+            preset_effects=preset_effects
         )
         
         # Encoder en base64
@@ -355,6 +376,176 @@ async def clone_voice(
     except Exception as e:
         logger.error(f"❌ Erreur clonage voix: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur clonage: {str(e)}")
+
+@app.post("/api/tts/jarvis")
+async def jarvis_tts(request: JarvisRequest):
+    """
+    Endpoint spécialisé pour la voix Jarvis
+    Utilise automatiquement le preset Jarvis avec optimisations
+    """
+    if not app_state["tts_engine"]:
+        raise HTTPException(status_code=503, detail="TTS Engine non disponible")
+    
+    try:
+        start_time = time.time()
+        
+        # Améliorer le texte avec des phrases Jarvis si catégorie fournie
+        enhanced_text = request.text
+        if request.phrase_category:
+            phrases = preset_manager.get_jarvis_phrases(request.phrase_category)
+            if phrases and request.phrase_category in phrases:
+                # Utiliser une phrase aléatoire de la catégorie comme introduction
+                import random
+                intro_phrase = random.choice(phrases[request.phrase_category])
+                enhanced_text = f"{intro_phrase} {request.text}"
+        
+        # Synthétiser avec preset Jarvis
+        synthesis_result = await app_state["tts_engine"].synthesize(
+            text=enhanced_text,
+            voice_id="french_male",  # Voix masculine pour Jarvis
+            language="fr",
+            speed=0.95,  # Légèrement plus lent
+            pitch=-2.0,  # Plus grave
+            preset_name="jarvis",
+            context=request.context
+        )
+        
+        # Gérer le résultat
+        if isinstance(synthesis_result, tuple):
+            audio_data, preset_effects = synthesis_result
+        else:
+            audio_data = synthesis_result
+            preset_effects = None
+        
+        # Traitement audio optimisé Jarvis
+        processed_audio = await app_state["audio_processor"].process(
+            audio_data,
+            normalize=True,
+            remove_silence=True,
+            apply_filters=True,
+            preset_effects=preset_effects
+        )
+        
+        # Encoder en base64
+        audio_base64 = base64.b64encode(processed_audio).decode('utf-8')
+        
+        # Métriques
+        duration = time.time() - start_time
+        record_tts_request(
+            voice_id="jarvis",
+            language="fr",
+            text_length=len(enhanced_text),
+            duration=duration,
+            streaming=False
+        )
+        
+        return {
+            "status": "success",
+            "audio": audio_base64,
+            "format": "wav",
+            "sample_rate": settings.SAMPLE_RATE,
+            "channels": settings.CHANNELS,
+            "duration_ms": int(duration * 1000),
+            "text_length": len(enhanced_text),
+            "original_text": request.text,
+            "enhanced_text": enhanced_text,
+            "preset": "jarvis",
+            "voice_effects": "applied" if preset_effects else "none"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur synthèse Jarvis: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur synthèse Jarvis: {str(e)}")
+
+@app.get("/api/presets")
+async def list_presets():
+    """Lister tous les presets vocaux disponibles"""
+    try:
+        presets = preset_manager.list_presets()
+        
+        return {
+            "status": "success",
+            "presets": presets,
+            "count": len(presets)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur liste presets: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@app.get("/api/presets/{preset_name}")
+async def get_preset_info(preset_name: str):
+    """Obtenir les détails d'un preset spécifique"""
+    try:
+        preset = preset_manager.get_preset(preset_name)
+        if not preset:
+            raise HTTPException(status_code=404, detail=f"Preset non trouvé: {preset_name}")
+        
+        info = {
+            "name": getattr(preset, 'name', preset_name),
+            "description": getattr(preset, 'description', 'Aucune description'),
+            "available": True
+        }
+        
+        # Ajouter infos spécifiques si disponibles
+        if hasattr(preset, 'get_voice_parameters'):
+            info['voice_parameters'] = preset.get_voice_parameters()
+        
+        if hasattr(preset, 'get_audio_effects'):
+            info['audio_effects'] = preset.get_audio_effects()
+            
+        if hasattr(preset, 'jarvis_phrases'):
+            info['phrase_categories'] = list(preset.jarvis_phrases.keys())
+        
+        return {
+            "status": "success",
+            "preset": info
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur info preset {preset_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@app.get("/api/jarvis/phrases")
+async def get_jarvis_phrases():
+    """Obtenir toutes les phrases typiques de Jarvis"""
+    try:
+        phrases = preset_manager.get_jarvis_phrases()
+        
+        return {
+            "status": "success",
+            "phrases": phrases,
+            "categories": list(phrases.keys()),
+            "total_phrases": sum(len(category_phrases) for category_phrases in phrases.values())
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur phrases Jarvis: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@app.get("/api/jarvis/phrases/{category}")
+async def get_jarvis_phrases_by_category(category: str):
+    """Obtenir les phrases Jarvis d'une catégorie spécifique"""
+    try:
+        phrases = preset_manager.get_jarvis_phrases(category)
+        
+        if category not in phrases:
+            raise HTTPException(status_code=404, detail=f"Catégorie non trouvée: {category}")
+        
+        return {
+            "status": "success",
+            "category": category,
+            "phrases": phrases[category],
+            "count": len(phrases[category])
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur phrases Jarvis {category}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

@@ -35,6 +35,7 @@ import { useJarvisAPI } from '../hooks/useJarvisAPI';
 import { useSphereAudioReactive } from '../hooks/useAudioAnalyzer';
 import Sphere3D from '../components/Sphere3D';
 import VoiceRecorder from '../components/VoiceRecorder';
+import '../styles/jarvis-holographic.css';
 
 function MainChat() {
   const theme = useTheme();
@@ -207,20 +208,40 @@ function MainChat() {
 
   return (
     <Box
+      className="jarvis-holographic-container"
       sx={{
         height: '100vh',
         width: '100vw',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: 'transparent',
-        background: `radial-gradient(circle at center, ${theme.palette.primary.main}08 0%, transparent 70%)`,
         position: 'relative',
         overflow: 'hidden'
       }}
     >
+      {/* Coins HUD */}
+      <div className="jarvis-hud-corner top-left" />
+      <div className="jarvis-hud-corner top-right" />
+      <div className="jarvis-hud-corner bottom-left" />
+      <div className="jarvis-hud-corner bottom-right" />
+      
+      {/* Particules flottantes */}
+      <div className="jarvis-particles">
+        {Array.from({ length: 20 }, (_, i) => (
+          <div
+            key={i}
+            className="jarvis-particle"
+            style={{
+              left: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 10}s`,
+              animationDuration: `${10 + Math.random() * 10}s`
+            }}
+          />
+        ))}
+      </div>
       {/* Zone de messages avec effet de fade */}
       <Box
         ref={chatContainerRef}
+        className="jarvis-interface"
         sx={{
           flex: 1,
           display: 'flex',
@@ -232,6 +253,19 @@ function MainChat() {
           overflow: 'hidden'
         }}
       >
+        {/* Titre JARVIS holographique */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 40,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10
+          }}
+        >
+          <h1 className="jarvis-title jarvis-glitch">J.A.R.V.I.S</h1>
+        </Box>
+
         {/* Sphère 3D centrale */}
         <Box
           sx={{
@@ -287,17 +321,22 @@ function MainChat() {
                 }}
               >
                 <Paper
+                  className={`jarvis-message ${message.type}`}
                   sx={{
                     p: 2,
                     backgroundColor: message.type === 'user' 
-                      ? theme.palette.secondary.main + '90'
+                      ? 'rgba(0, 255, 136, 0.1)'
                       : message.status === 'error'
-                      ? theme.palette.error.main + '90'
-                      : theme.palette.background.paper + '90',
-                    backdropFilter: 'blur(10px)',
+                      ? 'rgba(255, 59, 48, 0.1)'
+                      : 'rgba(0, 212, 255, 0.1)',
+                    backdropFilter: 'blur(20px)',
                     borderRadius: 3,
-                    border: `1px solid ${theme.palette.divider}40`,
-                    boxShadow: theme.shadows[4]
+                    border: message.type === 'user'
+                      ? '1px solid rgba(0, 255, 136, 0.3)'
+                      : '1px solid rgba(0, 212, 255, 0.3)',
+                    boxShadow: message.type === 'user'
+                      ? '0 0 20px rgba(0, 255, 136, 0.2)'
+                      : '0 0 20px rgba(0, 212, 255, 0.2)'
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
@@ -313,7 +352,16 @@ function MainChat() {
                       {message.type === 'user' ? <UserIcon /> : <BotIcon />}
                     </Avatar>
                     <Box sx={{ flex: 1 }}>
-                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
+                      <Typography 
+                        variant="body1" 
+                        className="jarvis-text-glow"
+                        sx={{ 
+                          whiteSpace: 'pre-wrap', 
+                          mb: 1,
+                          fontFamily: '"Orbitron", monospace',
+                          color: message.type === 'user' ? '#00ff88' : '#00d4ff'
+                        }}
+                      >
                         {message.content}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -353,8 +401,16 @@ function MainChat() {
                     <Avatar sx={{ bgcolor: theme.palette.primary.main }}>
                       <BotIcon />
                     </Avatar>
-                    <Typography variant="body1" sx={{ fontStyle: 'italic' }}>
-                      JARVIS réfléchit...
+                    <Typography 
+                      variant="body1" 
+                      className="jarvis-text-glow"
+                      sx={{ 
+                        fontStyle: 'italic',
+                        fontFamily: '"Orbitron", monospace',
+                        color: '#00d4ff'
+                      }}
+                    >
+                      JARVIS PROCESSING...
                     </Typography>
                   </Box>
                 </Paper>
@@ -368,15 +424,17 @@ function MainChat() {
 
       {/* Barre de saisie en bas */}
       <Box
+        className="jarvis-panel"
         sx={{
           position: 'fixed',
           bottom: 0,
           left: 0,
           right: 0,
           p: 3,
-          backgroundColor: theme.palette.background.paper + '95',
+          backgroundColor: 'transparent',
           backdropFilter: 'blur(20px)',
-          borderTop: `1px solid ${theme.palette.divider}`,
+          borderTop: '1px solid rgba(0, 212, 255, 0.3)',
+          borderRadius: 0,
           zIndex: 10
         }}
       >
@@ -387,16 +445,36 @@ function MainChat() {
               fullWidth
               multiline
               maxRows={4}
-              placeholder="Parlez ou tapez votre message à JARVIS..."
+              placeholder="Entrez votre commande ou requête..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={handleKeyPress}
               disabled={!isConnected || isTyping}
               variant="outlined"
+              className="jarvis-input"
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 3,
-                  backgroundColor: theme.palette.background.default + '50'
+                  backgroundColor: 'rgba(0, 212, 255, 0.05)',
+                  fontFamily: '"Orbitron", monospace',
+                  color: '#00d4ff',
+                  '& fieldset': {
+                    borderColor: 'rgba(0, 212, 255, 0.3)'
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(0, 212, 255, 0.5)'
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#00d4ff'
+                  }
+                },
+                '& .MuiInputBase-input': {
+                  color: '#00d4ff',
+                  fontFamily: '"Orbitron", monospace'
+                },
+                '& .MuiInputBase-input::placeholder': {
+                  color: 'rgba(0, 212, 255, 0.5)',
+                  opacity: 1
                 }
               }}
             />
@@ -406,15 +484,21 @@ function MainChat() {
               <IconButton
                 onClick={toggleMicrophone}
                 disabled={!isConnected}
+                className="jarvis-button"
                 sx={{
                   backgroundColor: isAnalyzing 
-                    ? theme.palette.success.main 
-                    : theme.palette.action.hover,
-                  color: isAnalyzing ? 'white' : theme.palette.text.primary,
+                    ? 'rgba(0, 255, 136, 0.2)' 
+                    : 'rgba(0, 212, 255, 0.1)',
+                  color: isAnalyzing ? '#00ff88' : '#00d4ff',
+                  border: isAnalyzing
+                    ? '2px solid #00ff88'
+                    : '2px solid #00d4ff',
+                  borderRadius: '50px',
+                  padding: '12px',
                   '&:hover': {
                     backgroundColor: isAnalyzing 
-                      ? theme.palette.success.dark 
-                      : theme.palette.action.selected,
+                      ? 'rgba(0, 255, 136, 0.3)' 
+                      : 'rgba(0, 212, 255, 0.2)',
                   }
                 }}
               >
@@ -427,14 +511,20 @@ function MainChat() {
               <IconButton
                 onClick={() => sendMessage(inputText)}
                 disabled={!inputText.trim() || !isConnected || isTyping}
+                className="jarvis-button"
                 sx={{
-                  backgroundColor: theme.palette.primary.main,
-                  color: theme.palette.primary.contrastText,
+                  backgroundColor: 'rgba(0, 212, 255, 0.2)',
+                  color: '#00d4ff',
+                  border: '2px solid #00d4ff',
+                  borderRadius: '50px',
+                  padding: '12px',
                   '&:hover': {
-                    backgroundColor: theme.palette.primary.dark
+                    backgroundColor: 'rgba(0, 212, 255, 0.3)'
                   },
                   '&:disabled': {
-                    backgroundColor: theme.palette.action.disabled
+                    backgroundColor: 'rgba(0, 212, 255, 0.05)',
+                    borderColor: 'rgba(0, 212, 255, 0.2)',
+                    color: 'rgba(0, 212, 255, 0.3)'
                   }
                 }}
               >
@@ -447,31 +537,65 @@ function MainChat() {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
               <Chip
-                label={isConnected ? 'JARVIS En ligne' : 'JARVIS Hors ligne'}
-                color={isConnected ? 'success' : 'error'}
+                label={isConnected ? 'JARVIS ONLINE' : 'JARVIS OFFLINE'}
+                className="jarvis-text-glow"
                 size="small"
                 icon={<BotIcon />}
+                sx={{
+                  backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                  border: `1px solid ${isConnected ? '#00ff88' : '#ff3b30'}`,
+                  color: isConnected ? '#00ff88' : '#ff3b30',
+                  fontFamily: '"Orbitron", monospace',
+                  '& .MuiChip-icon': {
+                    color: isConnected ? '#00ff88' : '#ff3b30'
+                  }
+                }}
               />
               {isAnalyzing && (
                 <Chip
-                  label={isSpeechDetected ? 'Parole détectée' : 'Écoute...'}
-                  color={isSpeechDetected ? 'warning' : 'info'}
+                  label={isSpeechDetected ? 'VOICE DETECTED' : 'LISTENING...'}
+                  className="jarvis-text-glow"
                   size="small"
                   icon={<MicIcon />}
+                  sx={{
+                    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                    border: `1px solid ${isSpeechDetected ? '#ff9500' : '#00d4ff'}`,
+                    color: isSpeechDetected ? '#ff9500' : '#00d4ff',
+                    fontFamily: '"Orbitron", monospace',
+                    '& .MuiChip-icon': {
+                      color: isSpeechDetected ? '#ff9500' : '#00d4ff'
+                    }
+                  }}
                 />
               )}
               {isSpeaking && (
                 <Chip
-                  label="JARVIS parle"
-                  color="secondary"
+                  label="JARVIS SPEAKING"
+                  className="jarvis-text-glow"
                   size="small"
                   icon={<VolumeIcon />}
+                  sx={{
+                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                    border: '1px solid #00ff88',
+                    color: '#00ff88',
+                    fontFamily: '"Orbitron", monospace',
+                    '& .MuiChip-icon': {
+                      color: '#00ff88'
+                    }
+                  }}
                 />
               )}
             </Box>
 
-            <Typography variant="caption" color="text.secondary">
-              {messages.length - 1} échanges • Conversation {conversationId ? 'active' : 'nouvelle'}
+            <Typography 
+              variant="caption" 
+              className="jarvis-text-glow"
+              sx={{ 
+                color: '#00d4ff',
+                fontFamily: '"Orbitron", monospace'
+              }}
+            >
+              {messages.length - 1} EXCHANGES • SESSION {conversationId ? 'ACTIVE' : 'NEW'}
             </Typography>
           </Box>
         </Box>
@@ -485,27 +609,75 @@ function MainChat() {
           right: 20,
           display: 'flex',
           flexDirection: 'column',
-          gap: 1,
+          gap: 2,
           zIndex: 20
         }}
       >
-        <Tooltip title="Outils de développement">
-          <Fab size="small" color="primary">
+        <Tooltip title="CODE TOOLS">
+          <Fab 
+            size="small" 
+            className="jarvis-button"
+            sx={{
+              backgroundColor: 'rgba(0, 212, 255, 0.1)',
+              border: '2px solid #00d4ff',
+              color: '#00d4ff',
+              '&:hover': {
+                backgroundColor: 'rgba(0, 212, 255, 0.2)',
+                transform: 'scale(1.1)'
+              }
+            }}
+          >
             <CodeIcon />
           </Fab>
         </Tooltip>
-        <Tooltip title="Mémoire">
-          <Fab size="small" color="secondary">
+        <Tooltip title="MEMORY BANK">
+          <Fab 
+            size="small" 
+            className="jarvis-button"
+            sx={{
+              backgroundColor: 'rgba(0, 255, 136, 0.1)',
+              border: '2px solid #00ff88',
+              color: '#00ff88',
+              '&:hover': {
+                backgroundColor: 'rgba(0, 255, 136, 0.2)',
+                transform: 'scale(1.1)'
+              }
+            }}
+          >
             <MemoryIcon />
           </Fab>
         </Tooltip>
-        <Tooltip title="Vision">
-          <Fab size="small" color="info">
+        <Tooltip title="VISION MODULE">
+          <Fab 
+            size="small" 
+            className="jarvis-button"
+            sx={{
+              backgroundColor: 'rgba(255, 107, 0, 0.1)',
+              border: '2px solid #ff6b00',
+              color: '#ff6b00',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 107, 0, 0.2)',
+                transform: 'scale(1.1)'
+              }
+            }}
+          >
             <VisionIcon />
           </Fab>
         </Tooltip>
-        <Tooltip title="Paramètres">
-          <Fab size="small" color="default">
+        <Tooltip title="SYSTEM CONFIG">
+          <Fab 
+            size="small" 
+            className="jarvis-button"
+            sx={{
+              backgroundColor: 'rgba(0, 212, 255, 0.1)',
+              border: '2px solid #00d4ff',
+              color: '#00d4ff',
+              '&:hover': {
+                backgroundColor: 'rgba(0, 212, 255, 0.2)',
+                transform: 'scale(1.1)'
+              }
+            }}
+          >
             <SettingsIcon />
           </Fab>
         </Tooltip>

@@ -329,6 +329,40 @@ services:
       timeout: 10s
       retries: 3
 
+  # 🎮 GPU Stats Service - Monitoring AMD RX 7800 XT
+  gpu-stats-service:
+    build:
+      context: ./services/gpu-stats-service
+      dockerfile: Dockerfile
+    container_name: jarvis_gpu_stats
+    ports:
+      - "5009:5009"
+    environment:
+      - PYTHONPATH=/app
+      - GPU_POLLING_INTERVAL=1
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+      - ./services/gpu-stats-service/cache:/app/cache
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.120
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   # 🌐 Frontend WebRTC - Interface moderne React
   frontend:
     build:
@@ -342,6 +376,7 @@ services:
       - REACT_APP_WEBSOCKET_URL=ws://brain-api:8081
       - REACT_APP_TTS_URL=http://tts-service:5002
       - REACT_APP_STT_URL=http://stt-service:5003
+      - REACT_APP_GPU_STATS_URL=http://gpu-stats-service:5009
     networks:
       jarvis_network:
         ipv4_address: 172.20.0.70
@@ -349,6 +384,7 @@ services:
       - brain-api
       - tts-service
       - stt-service
+      - gpu-stats-service
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]

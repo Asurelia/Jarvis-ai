@@ -1,0 +1,345 @@
+/**
+ * 🎵 Voice Waveform Styles - Animations et effets holographiques
+ * Styles CSS pour les composants de visualisation audio JARVIS
+ */
+
+/* Variables spécifiques aux waveforms */
+:root {
+  --waveform-glow-primary: #00d4ff;
+  --waveform-glow-secondary: #00ff88;
+  --waveform-glow-accent: #ff6b00;
+  --waveform-dark: rgba(0, 18, 32, 0.95);
+  --waveform-medium: rgba(0, 34, 68, 0.8);
+  --waveform-light: rgba(0, 68, 136, 0.6);
+}
+
+/* Container principal des waveforms */
+.voice-waveform-container {
+  position: relative;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  transition: all 0.3s ease;
+}
+
+.voice-waveform-container:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 0 40px var(--waveform-glow-primary)44,
+    inset 0 0 40px var(--waveform-glow-primary)22,
+    0 0 80px var(--waveform-glow-primary)22 !important;
+}
+
+/* Animations de pulsation pour les indicateurs d'état */
+@keyframes waveform-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 10px currentColor;
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.4);
+    box-shadow: 0 0 20px currentColor;
+  }
+}
+
+@keyframes waveform-listening-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.2);
+  }
+  75% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes waveform-speaking-glow {
+  0%, 100% {
+    text-shadow: 0 0 10px var(--waveform-glow-accent);
+    color: var(--waveform-glow-accent);
+  }
+  33% {
+    text-shadow: 0 0 15px var(--waveform-glow-primary);
+    color: var(--waveform-glow-primary);
+  }
+  66% {
+    text-shadow: 0 0 15px var(--waveform-glow-secondary);
+    color: var(--waveform-glow-secondary);
+  }
+}
+
+/* Animation de scan horizontal */
+@keyframes waveform-scan {
+  0% {
+    left: -100%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+/* Animation de grille holographique pour le fond */
+@keyframes waveform-grid {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0.1;
+  }
+  25% {
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate(25px, 25px) rotate(0.5deg);
+    opacity: 0.1;
+  }
+  75% {
+    opacity: 0.15;
+  }
+  100% {
+    transform: translate(50px, 50px) rotate(1deg);
+    opacity: 0.1;
+  }
+}
+
+/* Animation de rotation pour les éléments circulaires */
+@keyframes waveform-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Animation de pulsation des coins décoratifs */
+@keyframes waveform-corner-glow {
+  0%, 100% {
+    opacity: 0.6;
+    box-shadow: none;
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 
+      0 0 15px currentColor,
+      inset 0 0 15px currentColor;
+  }
+}
+
+/* Classes d'état pour les animations */
+.waveform-status-idle {
+  animation: none;
+}
+
+.waveform-status-listening {
+  animation: waveform-listening-pulse 2s ease-in-out infinite;
+}
+
+.waveform-status-speaking {
+  animation: waveform-speaking-glow 1.5s ease-in-out infinite;
+}
+
+.waveform-status-error {
+  animation: waveform-pulse 1s ease-in-out infinite;
+  color: #ff3b30 !important;
+  text-shadow: 0 0 10px #ff3b30 !important;
+}
+
+/* Effet de particules flottantes pour les waveforms actives */
+.waveform-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.waveform-particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--waveform-glow-primary);
+  border-radius: 50%;
+  animation: waveform-particle-float 15s linear infinite;
+  opacity: 0;
+}
+
+@keyframes waveform-particle-float {
+  0% {
+    transform: translateY(100vh) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-10vh) translateX(100px);
+    opacity: 0;
+  }
+}
+
+/* Styles pour les barres de fréquence */
+.waveform-frequency-bar {
+  transition: all 0.1s ease-out;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+.waveform-frequency-bar:hover {
+  filter: drop-shadow(0 0 10px currentColor) brightness(1.2);
+}
+
+/* Styles pour la visualisation circulaire */
+.waveform-circular-container {
+  position: relative;
+}
+
+.waveform-circular-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  animation: waveform-pulse 2s ease-in-out infinite;
+}
+
+/* Styles pour la forme d'onde */
+.waveform-wave-path {
+  filter: drop-shadow(0 0 3px currentColor);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Effets de réflexion */
+.waveform-reflection {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30%;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(0, 212, 255, 0.1) 50%,
+    transparent 100%
+  );
+  transform: scaleY(-1);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Indicateurs de niveau audio */
+.waveform-level-indicator {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--waveform-glow-primary) 50%,
+    transparent 100%
+  );
+  transition: opacity 0.2s ease;
+}
+
+.waveform-level-low { opacity: 0.3; }
+.waveform-level-medium { opacity: 0.6; }
+.waveform-level-high { opacity: 1; }
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .voice-waveform-container {
+    padding: 10px;
+  }
+  
+  .waveform-particles {
+    display: none; /* Désactiver les particules sur mobile pour les performances */
+  }
+}
+
+@media (max-width: 480px) {
+  .voice-waveform-container {
+    padding: 8px;
+    border-radius: 8px;
+  }
+}
+
+/* Mode sombre amélioré */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --waveform-dark: rgba(0, 18, 32, 0.98);
+    --waveform-medium: rgba(0, 34, 68, 0.9);
+  }
+}
+
+/* Mode haute performance (réduit les animations) */
+@media (prefers-reduced-motion: reduce) {
+  .voice-waveform-container,
+  .waveform-status-listening,
+  .waveform-status-speaking,
+  .waveform-particle,
+  .waveform-circular-center {
+    animation: none !important;
+  }
+  
+  .voice-waveform-container {
+    transition: none;
+  }
+}
+
+/* Thèmes alternatifs */
+.waveform-theme-matrix {
+  --waveform-glow-primary: #00ff88;
+  --waveform-glow-secondary: #44ff88;
+  --waveform-glow-accent: #88ffaa;
+}
+
+.waveform-theme-reactor {
+  --waveform-glow-primary: #ff6b00;
+  --waveform-glow-secondary: #ffaa44;
+  --waveform-glow-accent: #ffcc66;
+}
+
+.waveform-theme-plasma {
+  --waveform-glow-primary: #aa44ff;
+  --waveform-glow-secondary: #cc66ff;
+  --waveform-glow-accent: #ee88ff;
+}
+
+/* Utilitaires */
+.waveform-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.waveform-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.waveform-glow {
+  filter: drop-shadow(0 0 10px currentColor);
+}
+
+.waveform-glow-intense {
+  filter: drop-shadow(0 0 20px currentColor) brightness(1.3);
+}

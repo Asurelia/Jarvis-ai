@@ -1,0 +1,751 @@
+/* JARVIS Holographic Interface - Iron Man Style */
+
+/* Import de la police Orbitron depuis Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&display=swap');
+
+/* Variables CSS pour les couleurs holographiques */
+:root {
+  --jarvis-primary: #00d4ff;
+  --jarvis-secondary: #00ff88;
+  --jarvis-accent: #ff6b00;
+  --jarvis-glow: #00d4ff;
+  --jarvis-dark: #001220;
+  --jarvis-medium: #002244;
+  --jarvis-light: #004466;
+  --jarvis-warning: #ff9500;
+  --jarvis-error: #ff3b30;
+  --jarvis-success: #00ff88;
+}
+
+/* Corps principal avec effet holographique */
+.jarvis-holographic-container {
+  position: relative;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at center, 
+    rgba(0, 212, 255, 0.1) 0%, 
+    rgba(0, 212, 255, 0.05) 30%, 
+    rgba(0, 18, 32, 0.95) 70%, 
+    rgba(0, 18, 32, 1) 100%);
+  background-attachment: fixed;
+  overflow: hidden;
+}
+
+/* Effet de grille holographique en arrière-plan */
+.jarvis-holographic-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    linear-gradient(rgba(0, 212, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: holographic-grid 20s linear infinite;
+  pointer-events: none;
+}
+
+/* Animation de la grille */
+@keyframes holographic-grid {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(50px, 50px); }
+}
+
+/* Interface principale */
+.jarvis-interface {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  font-family: 'Orbitron', monospace;
+  color: var(--jarvis-primary);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Panneaux holographiques */
+.jarvis-panel {
+  background: linear-gradient(135deg, 
+    rgba(0, 212, 255, 0.1) 0%, 
+    rgba(0, 212, 255, 0.05) 50%, 
+    rgba(0, 255, 136, 0.05) 100%);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 10px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 
+    0 0 30px rgba(0, 212, 255, 0.3),
+    inset 0 0 30px rgba(0, 212, 255, 0.1),
+    0 0 60px rgba(0, 212, 255, 0.1);
+  animation: panel-pulse 4s ease-in-out infinite;
+}
+
+/* Animation de pulsation des panneaux */
+@keyframes panel-pulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 30px rgba(0, 212, 255, 0.3),
+      inset 0 0 30px rgba(0, 212, 255, 0.1),
+      0 0 60px rgba(0, 212, 255, 0.1);
+  }
+  50% {
+    box-shadow: 
+      0 0 40px rgba(0, 212, 255, 0.5),
+      inset 0 0 40px rgba(0, 212, 255, 0.2),
+      0 0 80px rgba(0, 212, 255, 0.2);
+  }
+}
+
+/* Effet de scan holographique */
+.jarvis-panel::after {
+  content: '';
+  position: absolute;
+  top: -100%;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(180deg, 
+    transparent 0%, 
+    rgba(0, 212, 255, 0.3) 50%, 
+    transparent 100%);
+  animation: holographic-scan 6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes holographic-scan {
+  0% { top: -100%; }
+  100% { top: 200%; }
+}
+
+/* Texte avec effet de lueur */
+.jarvis-text-glow {
+  text-shadow: 
+    0 0 10px var(--jarvis-glow),
+    0 0 20px var(--jarvis-glow),
+    0 0 30px var(--jarvis-glow),
+    0 0 40px var(--jarvis-glow);
+  animation: text-pulse 2s ease-in-out infinite;
+}
+
+@keyframes text-pulse {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 
+      0 0 10px var(--jarvis-glow),
+      0 0 20px var(--jarvis-glow),
+      0 0 30px var(--jarvis-glow),
+      0 0 40px var(--jarvis-glow);
+  }
+  50% {
+    opacity: 0.8;
+    text-shadow: 
+      0 0 5px var(--jarvis-glow),
+      0 0 10px var(--jarvis-glow),
+      0 0 15px var(--jarvis-glow),
+      0 0 20px var(--jarvis-glow);
+  }
+}
+
+/* Titre principal JARVIS */
+.jarvis-title {
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-align: center;
+  margin: 2rem 0;
+  background: linear-gradient(45deg, var(--jarvis-primary), var(--jarvis-secondary));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 
+    0 0 30px var(--jarvis-primary),
+    0 0 60px var(--jarvis-primary),
+    0 0 90px var(--jarvis-primary);
+  animation: title-glow 3s ease-in-out infinite;
+}
+
+@keyframes title-glow {
+  0%, 100% {
+    filter: brightness(1) contrast(1);
+  }
+  50% {
+    filter: brightness(1.2) contrast(1.1);
+  }
+}
+
+/* Boutons holographiques */
+.jarvis-button {
+  background: linear-gradient(135deg, 
+    rgba(0, 212, 255, 0.2) 0%, 
+    rgba(0, 212, 255, 0.1) 100%);
+  border: 2px solid var(--jarvis-primary);
+  border-radius: 50px;
+  padding: 12px 30px;
+  font-family: 'Orbitron', monospace;
+  font-weight: 500;
+  color: var(--jarvis-primary);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  box-shadow: 
+    0 0 20px rgba(0, 212, 255, 0.3),
+    inset 0 0 20px rgba(0, 212, 255, 0.1);
+}
+
+.jarvis-button:hover {
+  background: linear-gradient(135deg, 
+    rgba(0, 212, 255, 0.3) 0%, 
+    rgba(0, 212, 255, 0.2) 100%);
+  box-shadow: 
+    0 0 30px rgba(0, 212, 255, 0.5),
+    inset 0 0 30px rgba(0, 212, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.jarvis-button:active {
+  transform: translateY(0);
+}
+
+/* État actif pour les boutons de contrôle */
+.jarvis-button.active {
+  background: linear-gradient(135deg, 
+    rgba(0, 212, 255, 0.4) 0%, 
+    rgba(0, 212, 255, 0.3) 100%);
+  border-color: rgba(0, 212, 255, 0.8);
+  box-shadow: 
+    0 0 25px rgba(0, 212, 255, 0.6),
+    inset 0 0 25px rgba(0, 212, 255, 0.2);
+  color: #ffffff;
+}
+
+/* Effet de vague au clic */
+.jarvis-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(0, 212, 255, 0.5);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.jarvis-button:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* Input holographique */
+.jarvis-input {
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 10px;
+  padding: 15px 20px;
+  font-family: 'Orbitron', monospace;
+  color: var(--jarvis-primary);
+  font-size: 1rem;
+  width: 100%;
+  transition: all 0.3s ease;
+  box-shadow: 
+    0 0 20px rgba(0, 212, 255, 0.1),
+    inset 0 0 20px rgba(0, 212, 255, 0.05);
+}
+
+.jarvis-input:focus {
+  outline: none;
+  border-color: var(--jarvis-primary);
+  background: rgba(0, 212, 255, 0.1);
+  box-shadow: 
+    0 0 30px rgba(0, 212, 255, 0.3),
+    inset 0 0 30px rgba(0, 212, 255, 0.1);
+}
+
+.jarvis-input::placeholder {
+  color: rgba(0, 212, 255, 0.5);
+  font-style: italic;
+}
+
+/* Messages de chat holographiques */
+.jarvis-message {
+  background: linear-gradient(135deg, 
+    rgba(0, 212, 255, 0.1) 0%, 
+    rgba(0, 212, 255, 0.05) 100%);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 15px;
+  padding: 15px 20px;
+  margin: 10px 0;
+  position: relative;
+  animation: message-appear 0.5s ease-out;
+  box-shadow: 
+    0 0 20px rgba(0, 212, 255, 0.2),
+    inset 0 0 20px rgba(0, 212, 255, 0.05);
+}
+
+.jarvis-message.user {
+  background: linear-gradient(135deg, 
+    rgba(0, 255, 136, 0.1) 0%, 
+    rgba(0, 255, 136, 0.05) 100%);
+  border-color: rgba(0, 255, 136, 0.3);
+  box-shadow: 
+    0 0 20px rgba(0, 255, 136, 0.2),
+    inset 0 0 20px rgba(0, 255, 136, 0.05);
+}
+
+@keyframes message-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Indicateur de chargement */
+.jarvis-loading {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0, 212, 255, 0.2);
+  border-top-color: var(--jarvis-primary);
+  border-radius: 50%;
+  animation: jarvis-spin 1s linear infinite;
+}
+
+@keyframes jarvis-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Effets de particules */
+.jarvis-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.jarvis-particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--jarvis-primary);
+  border-radius: 50%;
+  box-shadow: 
+    0 0 10px var(--jarvis-primary),
+    0 0 20px var(--jarvis-primary);
+  animation: particle-float 10s linear infinite;
+}
+
+@keyframes particle-float {
+  0% {
+    transform: translateY(100vh) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(100px);
+    opacity: 0;
+  }
+}
+
+/* HUD Elements */
+.jarvis-hud-corner {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border: 2px solid var(--jarvis-primary);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.jarvis-hud-corner.top-left {
+  top: 20px;
+  left: 20px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.jarvis-hud-corner.top-right {
+  top: 20px;
+  right: 20px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.jarvis-hud-corner.bottom-left {
+  bottom: 20px;
+  left: 20px;
+  border-right: none;
+  border-top: none;
+}
+
+.jarvis-hud-corner.bottom-right {
+  bottom: 20px;
+  right: 20px;
+  border-left: none;
+  border-top: none;
+}
+
+/* Animations pour les coins HUD */
+.jarvis-hud-corner::before,
+.jarvis-hud-corner::after {
+  content: '';
+  position: absolute;
+  background: var(--jarvis-primary);
+  opacity: 0.8;
+}
+
+.jarvis-hud-corner.top-left::before {
+  top: -2px;
+  left: -2px;
+  width: 20px;
+  height: 2px;
+  animation: hud-scan-h 3s linear infinite;
+}
+
+.jarvis-hud-corner.top-left::after {
+  top: -2px;
+  left: -2px;
+  width: 2px;
+  height: 20px;
+  animation: hud-scan-v 3s linear infinite;
+}
+
+@keyframes hud-scan-h {
+  0%, 100% { width: 20px; }
+  50% { width: 100px; }
+}
+
+@keyframes hud-scan-v {
+  0%, 100% { height: 20px; }
+  50% { height: 100px; }
+}
+
+/* Effet de distorsion holographique */
+.jarvis-glitch {
+  animation: holographic-glitch 10s infinite;
+}
+
+@keyframes holographic-glitch {
+  0%, 100% {
+    text-shadow: 
+      0 0 10px var(--jarvis-glow),
+      0 0 20px var(--jarvis-glow);
+  }
+  2% {
+    text-shadow: 
+      2px 0 10px var(--jarvis-error),
+      -2px 0 10px var(--jarvis-secondary),
+      0 0 20px var(--jarvis-glow);
+  }
+  4% {
+    text-shadow: 
+      0 0 10px var(--jarvis-glow),
+      0 0 20px var(--jarvis-glow);
+  }
+}
+
+/* === SCANLINE EFFECTS - Iron Man Style === */
+
+/* Container principal pour les scanlines */
+.jarvis-scanlines-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+/* Scanline horizontale principale */
+.jarvis-scanline-horizontal {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(0, 212, 255, 0.3) 20%, 
+    rgba(0, 212, 255, 0.8) 50%, 
+    rgba(0, 212, 255, 0.3) 80%, 
+    transparent 100%);
+  box-shadow: 
+    0 0 10px rgba(0, 212, 255, 0.8),
+    0 0 20px rgba(0, 212, 255, 0.6),
+    0 0 30px rgba(0, 212, 255, 0.4);
+  animation: scanline-sweep 3.5s linear infinite;
+}
+
+/* Scanline horizontale secondaire (plus rapide) */
+.jarvis-scanline-horizontal.fast {
+  height: 1px;
+  opacity: 0.6;
+  animation-duration: 2.8s;
+  animation-delay: 1.2s;
+}
+
+/* Scanline horizontale tertiaire (plus lente) */
+.jarvis-scanline-horizontal.slow {
+  height: 3px;
+  opacity: 0.4;
+  animation-duration: 4.5s;
+  animation-delay: 2.1s;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(0, 255, 136, 0.2) 20%, 
+    rgba(0, 255, 136, 0.6) 50%, 
+    rgba(0, 255, 136, 0.2) 80%, 
+    transparent 100%);
+  box-shadow: 
+    0 0 8px rgba(0, 255, 136, 0.6),
+    0 0 16px rgba(0, 255, 136, 0.4);
+}
+
+/* Animation de balayage horizontal */
+@keyframes scanline-sweep {
+  0% {
+    top: -10px;
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100vh + 10px);
+    opacity: 0;
+  }
+}
+
+/* Scanlines verticales pour effet grille */
+.jarvis-scanline-vertical {
+  position: absolute;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(180deg, 
+    transparent 0%, 
+    rgba(0, 212, 255, 0.2) 20%, 
+    rgba(0, 212, 255, 0.5) 50%, 
+    rgba(0, 212, 255, 0.2) 80%, 
+    transparent 100%);
+  box-shadow: 
+    0 0 5px rgba(0, 212, 255, 0.5),
+    0 0 10px rgba(0, 212, 255, 0.3);
+  animation: scanline-vertical-sweep 4s linear infinite;
+}
+
+/* Scanline verticale secondaire */
+.jarvis-scanline-vertical.fast {
+  opacity: 0.4;
+  animation-duration: 3.2s;
+  animation-delay: 1.8s;
+}
+
+/* Scanline verticale tertiaire */
+.jarvis-scanline-vertical.slow {
+  width: 2px;
+  opacity: 0.3;
+  animation-duration: 5s;
+  animation-delay: 0.5s;
+  background: linear-gradient(180deg, 
+    transparent 0%, 
+    rgba(255, 107, 0, 0.2) 20%, 
+    rgba(255, 107, 0, 0.4) 50%, 
+    rgba(255, 107, 0, 0.2) 80%, 
+    transparent 100%);
+  box-shadow: 
+    0 0 5px rgba(255, 107, 0, 0.4),
+    0 0 10px rgba(255, 107, 0, 0.2);
+}
+
+/* Animation de balayage vertical */
+@keyframes scanline-vertical-sweep {
+  0% {
+    left: -10px;
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100vw + 10px);
+    opacity: 0;
+  }
+}
+
+/* Mode intense avec plus de scanlines */
+.jarvis-scanlines-container.intense .jarvis-scanline-horizontal {
+  animation-duration: 2s;
+}
+
+.jarvis-scanlines-container.intense .jarvis-scanline-vertical {
+  animation-duration: 2.5s;
+}
+
+/* Scanlines diagonales pour effet avancé */
+.jarvis-scanline-diagonal {
+  position: absolute;
+  width: 200%;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(0, 212, 255, 0.3) 50%, 
+    transparent 100%);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+  transform-origin: center;
+  transform: rotate(45deg);
+  animation: scanline-diagonal-sweep 6s linear infinite;
+}
+
+@keyframes scanline-diagonal-sweep {
+  0% {
+    top: -50%;
+    left: -50%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    top: 150%;
+    left: 150%;
+    opacity: 0;
+  }
+}
+
+/* Effet de glitch sur les scanlines */
+.jarvis-scanlines-container.glitch .jarvis-scanline-horizontal {
+  animation: scanline-glitch 3.5s linear infinite;
+}
+
+@keyframes scanline-glitch {
+  0%, 90%, 100% {
+    transform: translateX(0);
+    filter: hue-rotate(0deg);
+  }
+  91% {
+    transform: translateX(-5px);
+    filter: hue-rotate(90deg);
+  }
+  92% {
+    transform: translateX(5px);
+    filter: hue-rotate(180deg);
+  }
+  93% {
+    transform: translateX(-3px);
+    filter: hue-rotate(270deg);
+  }
+  94% {
+    transform: translateX(3px);
+    filter: hue-rotate(0deg);
+  }
+  95% {
+    transform: translateX(0);
+  }
+}
+
+/* Effet de radar circulaire */
+.jarvis-radar-sweep {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.jarvis-radar-sweep::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 100px;
+  background: linear-gradient(180deg, 
+    rgba(0, 212, 255, 0.8) 0%, 
+    transparent 100%);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
+  transform-origin: bottom center;
+  transform: translate(-50%, -100%);
+  animation: radar-sweep 4s linear infinite;
+}
+
+@keyframes radar-sweep {
+  0% {
+    transform: translate(-50%, -100%) rotate(0deg);
+  }
+  100% {
+    transform: translate(-50%, -100%) rotate(360deg);
+  }
+}
+
+/* États de contrôle */
+.jarvis-scanlines-container.disabled {
+  display: none;
+}
+
+.jarvis-scanlines-container.reduced-motion .jarvis-scanline-horizontal,
+.jarvis-scanlines-container.reduced-motion .jarvis-scanline-vertical {
+  animation-duration: 8s;
+  opacity: 0.3;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .jarvis-title {
+    font-size: 2rem;
+  }
+  
+  .jarvis-panel {
+    padding: 15px;
+  }
+  
+  .jarvis-hud-corner {
+    width: 60px;
+    height: 60px;
+  }
+  
+  /* Réduction des effets sur mobile */
+  .jarvis-scanlines-container {
+    opacity: 0.7;
+  }
+  
+  .jarvis-scanline-horizontal,
+  .jarvis-scanline-vertical {
+    animation-duration: 5s;
+  }
+  
+  .jarvis-radar-sweep {
+    width: 150px;
+    height: 150px;
+  }
+}

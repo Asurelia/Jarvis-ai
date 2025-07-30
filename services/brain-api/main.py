@@ -25,7 +25,8 @@ from core.agent import ReactAgent
 from core.memory import HybridMemoryManager
 from core.websocket_manager import WebSocketManager
 from core.audio_streamer import AudioStreamer
-from api.routes import health, chat, memory, agent, metacognition, audio
+from personas.persona_manager import PersonaManager
+from api.routes import health, chat, memory, agent, metacognition, audio, persona
 from utils.config import settings
 from utils.monitoring import setup_metrics
 
@@ -55,6 +56,7 @@ app_state: Dict[str, Any] = {
     "memory": None,
     "websocket_manager": None,
     "audio_streamer": None,
+    "persona_manager": None,
     "startup_time": None,
     "healthy": False
 }
@@ -86,23 +88,33 @@ async def lifespan(app: FastAPI):
         await app_state["memory"].initialize()
         logger.info("✅ Memory Manager prêt")
         
-        # 3. React Agent
+        # 3. Persona Manager
+        logger.info("🎭 Initialisation Persona Manager...")
+        app_state["persona_manager"] = PersonaManager(
+            memory_manager=app_state["memory"],
+            default_persona="jarvis_classic"
+        )
+        await app_state["persona_manager"].initialize()
+        logger.info("✅ Persona Manager prêt")
+        
+        # 4. React Agent avec Persona Manager
         logger.info("🤖 Initialisation React Agent...")
         app_state["agent"] = ReactAgent(
             llm_url=settings.OLLAMA_URL,
             memory_manager=app_state["memory"],
-            metacognition=app_state["metacognition"]
+            metacognition=app_state["metacognition"],
+            persona_manager=app_state["persona_manager"]
         )
         await app_state["agent"].initialize()
         logger.info("✅ React Agent prêt")
         
-        # 4. Audio Streamer
+        # 5. Audio Streamer
         logger.info("🎵 Initialisation Audio Streamer...")
         app_state["audio_streamer"] = AudioStreamer()
         await app_state["audio_streamer"].initialize()
         logger.info("✅ Audio Streamer prêt")
         
-        # 5. WebSocket Manager avec Audio Streamer
+        # 6. WebSocket Manager avec Audio Streamer
         logger.info("🔌 Initialisation WebSocket Manager...")
         app_state["websocket_manager"] = WebSocketManager(
             agent=app_state["agent"],
@@ -142,6 +154,9 @@ async def lifespan(app: FastAPI):
             
         if app_state["agent"]:
             await app_state["agent"].shutdown()
+            
+        if app_state["persona_manager"]:
+            await app_state["persona_manager"].shutdown()
             
         if app_state["memory"]:
             await app_state["memory"].shutdown()
@@ -183,6 +198,7 @@ app.include_router(memory.router, prefix="/api/memory", tags=["Memory"])
 app.include_router(agent.router, prefix="/api/agent", tags=["Agent"])
 app.include_router(metacognition.router, prefix="/api/metacognition", tags=["Metacognition"])
 app.include_router(audio.router, prefix="/api/audio", tags=["Audio"])
+app.include_router(persona.router, prefix="/api/persona", tags=["Persona"])
 
 # 🔌 WebSocket endpoint
 from core.websocket_handler import websocket_endpoint
@@ -202,7 +218,8 @@ async def root():
             "agent": app_state["agent"] is not None,
             "memory": app_state["memory"] is not None,
             "websocket": app_state["websocket_manager"] is not None,
-            "audio_streamer": app_state["audio_streamer"] is not None
+            "audio_streamer": app_state["audio_streamer"] is not None,
+            "persona_manager": app_state["persona_manager"] is not None
         },
         "endpoints": {
             "health": "/health",
@@ -212,6 +229,7 @@ async def root():
             "metacognition": "/api/metacognition",
             "websocket": "/ws",
             "audio": "/api/audio",
+            "persona": "/api/persona",
             "metrics": "/metrics",
             "docs": "/docs"
         }

@@ -39,6 +39,7 @@ import {
 
 import { useJarvis } from '../contexts/JarvisContext';
 import { useJarvisAPI } from '../hooks/useJarvisAPI';
+import GPUStats from '../components/GPUStats';
 
 // Composant de carte de statut de module
 function ModuleStatusCard({ title, icon: Icon, status, description, stats, color = 'primary' }) {
@@ -470,6 +471,17 @@ function Dashboard() {
             }}
             color="primary"
           />
+        </Grid>
+      </Grid>
+      
+      {/* Statistiques GPU */}
+      <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>
+        Monitoring GPU
+      </Typography>
+      
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12}>
+          <GPUStats />
         </Grid>
       </Grid>
       

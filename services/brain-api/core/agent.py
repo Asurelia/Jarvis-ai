@@ -55,10 +55,11 @@ class ReactAgent:
     Implémente le pattern Think → Act → Observe
     """
     
-    def __init__(self, llm_url: str, memory_manager=None, metacognition=None):
+    def __init__(self, llm_url: str, memory_manager=None, metacognition=None, persona_manager=None):
         self.llm_url = llm_url
         self.memory_manager = memory_manager
         self.metacognition = metacognition
+        self.persona_manager = persona_manager
         
         # Configuration
         self.max_iterations = 5
@@ -83,7 +84,7 @@ class ReactAgent:
             "avg_steps": 0.0
         }
         
-        logger.info("🤖 React Agent initialisé")
+        logger.info("🤖 React Agent initialisé avec Persona Manager" if persona_manager else "🤖 React Agent initialisé")
     
     async def initialize(self):
         """Initialisation asynchrone de l'agent"""
@@ -174,7 +175,9 @@ class ReactAgent:
             # Finaliser l'exécution
             if execution.status != AgentState.COMPLETED:
                 # Générer une réponse finale si pas encore fait
-                execution.final_answer = await self._generate_final_answer(execution)
+                raw_answer = await self._generate_final_answer(execution)
+                # Appliquer le formatage de la persona si disponible
+                execution.final_answer = await self._format_with_persona_async(raw_answer, context)
                 execution.status = AgentState.COMPLETED
             
             execution.end_time = time.time()
@@ -554,6 +557,73 @@ INSTRUCTIONS:
             "is_active": self.is_active,
             "tools_count": len(self.tools)
         }
+    
+    async def _format_with_persona_async(self, content: str, context: Optional[Dict] = None) -> str:
+        """
+        Formater une réponse avec la persona active
+        
+        Args:
+            content: Contenu brut à formater
+            context: Contexte de la conversation
+            
+        Returns:
+            Contenu formaté selon la persona active
+        """
+        if not self.persona_manager:
+            return content
+        
+        try:
+            # Enrichir le contexte avec des infos de l'agent
+            enriched_context = context.copy() if context else {}
+            enriched_context.update({
+                "agent_type": "react_agent",
+                "execution_context": True,
+                "task_completion": True
+            })
+            
+            # Suggérer un changement de persona si approprié
+            suggested_persona = await self.persona_manager.suggest_persona_switch(enriched_context)
+            if suggested_persona:
+                current_persona = self.persona_manager.get_current_persona()
+                if current_persona and suggested_persona != current_persona.name:
+                    logger.info(f"💡 Suggestion changement persona: {current_persona.name} → {suggested_persona}")
+                    # Note: Le changement automatique est désactivé pour laisser le contrôle à l'utilisateur
+            
+            # Formater avec la persona actuelle
+            formatted = self.persona_manager.format_response(content, enriched_context)
+            return formatted
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur formatage persona: {e}")
+            return content
+    
+    async def get_persona_greeting(self) -> Optional[str]:
+        """Obtenir un message de salutation de la persona active"""
+        if not self.persona_manager:
+            return None
+        
+        try:
+            current_persona = self.persona_manager.get_current_persona()
+            if current_persona:
+                return current_persona.get_random_phrase("greetings")
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur récupération salutation: {e}")
+        
+        return None
+    
+    async def get_persona_status_report(self) -> Optional[str]:
+        """Obtenir un rapport de statut de la persona active"""
+        if not self.persona_manager:
+            return None
+        
+        try:
+            current_persona = self.persona_manager.get_current_persona()
+            if current_persona and hasattr(current_persona, 'get_status_report'):
+                return current_persona.get_status_report()
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur rapport persona: {e}")
+        
+        return None
     
     def _log_final_stats(self):
         """Logger les statistiques finales"""

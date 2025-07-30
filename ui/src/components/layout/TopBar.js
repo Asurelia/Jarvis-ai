@@ -34,7 +34,8 @@ import {
   MoreVert as MoreIcon,
   Screenshot as ScreenshotIcon,
   Memory as MemoryIcon,
-  Speed as PerformanceIcon
+  Speed as PerformanceIcon,
+  Dashboard as SituationRoomIcon
 } from '@mui/icons-material';
 
 import { useJarvis } from '../../contexts/JarvisContext';
@@ -52,7 +53,7 @@ const pageConfig = {
   '/settings': { title: 'Paramètres', subtitle: 'Configuration JARVIS' }
 };
 
-function TopBar({ height, showMenuButton, isElectron, onChatToggle, isChatOpen }) {
+function TopBar({ height, showMenuButton, isElectron, onChatToggle, isChatOpen, onSituationRoomToggle }) {
   const theme = useTheme();
   const location = useLocation();
   const { state, actions, electronAPI } = useJarvis();
@@ -302,6 +303,28 @@ function TopBar({ height, showMenuButton, isElectron, onChatToggle, isChatOpen }
               <SandboxIcon />
             </IconButton>
           </Tooltip>
+
+          {/* Situation Room Toggle */}
+          {onSituationRoomToggle && (
+            <Tooltip title="Ouvrir Situation Room (Ctrl+Shift+J)">
+              <IconButton
+                size="small"
+                onClick={onSituationRoomToggle}
+                sx={{
+                  color: theme.palette.secondary.main,
+                  backgroundColor: alpha(theme.palette.secondary.main, 0.1),
+                  border: `1px solid ${alpha(theme.palette.secondary.main, 0.3)}`,
+                  marginRight: 1,
+                  '&:hover': {
+                    backgroundColor: alpha(theme.palette.secondary.main, 0.2),
+                    transform: 'scale(1.05)'
+                  }
+                }}
+              >
+                <SituationRoomIcon />
+              </IconButton>
+            </Tooltip>
+          )}
 
           {/* Chat Toggle */}
           {onChatToggle && (

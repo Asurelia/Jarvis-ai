@@ -28,6 +28,10 @@ import SystemLogs from './pages/SystemLogs';
 import Settings from './pages/Settings';
 import Chat from './pages/Chat';
 
+// Situation Room
+import SituationRoom from './components/SituationRoom';
+import './styles/situation-room.css';
+
 // Hook pour la responsivité
 function useResponsive() {
   const [isMobile, setIsMobile] = useState(false);
@@ -57,9 +61,24 @@ function App() {
   const [sidebarWidth] = useState(280);
   const [topBarHeight] = useState(64);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isSituationRoomOpen, setIsSituationRoomOpen] = useState(false);
   
   // Vérifier si on est dans Electron
   const isElectron = window.electronAPI !== undefined;
+  
+  // Gestion du raccourci clavier pour le Situation Room
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Ctrl+Shift+J pour ouvrir/fermer le Situation Room
+      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+        e.preventDefault();
+        setIsSituationRoomOpen(prev => !prev);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, []);
   
   // Vérifier si on est sur la page de chat principal (fullscreen)
   const isMainChatRoute = window.location.pathname === '/' || window.location.pathname === '/chat';
@@ -147,6 +166,7 @@ function App() {
             isElectron={isElectron}
             onChatToggle={() => setIsChatOpen(!isChatOpen)}
             isChatOpen={isChatOpen}
+            onSituationRoomToggle={() => setIsSituationRoomOpen(!isSituationRoomOpen)}
           />
         )}
         
@@ -295,8 +315,14 @@ function App() {
         )}
       </Box>
       
+      {/* Situation Room - Centre de contrôle Iron Man */}
+      <SituationRoom 
+        isVisible={isSituationRoomOpen}
+        onClose={() => setIsSituationRoomOpen(false)}
+      />
+
       {/* Effets de particules en arrière-plan (optionnel) */}
-      {isDesktop && (
+      {isDesktop && !isSituationRoomOpen && (
         <Box
           sx={{
             position: 'fixed',
