@@ -115,4 +115,37 @@ coverage.xml
 # Windows specific
 *.exe
 *.msi
-*.lnkservices/redis/data/
+*.lnk
+
+# Redis data
+services/redis/data/
+services/redis/dump.rdb
+
+# Security - NEVER COMMIT THESE
+# JWT tokens, API keys, passwords
+*.jwt
+*_token*
+*_secret*
+*_key*
+*api_key*
+*password*
+*client_secret*
+*bearer*
+
+# Database dumps with potential secrets
+*.sql
+*.dump
+*.backup
+
+# Test secrets (should use environment variables)
+test_secrets.json
+test_tokens.json
+auth_tokens.json
+
+# Supabase keys (if ever used)
+*supabase*
+*SUPABASE*
+
+# Docker secrets
+docker-secrets/
+docker-compose.override.yml

@@ -25,7 +25,7 @@ class MockSecurityManager:
     """Mock du gestionnaire de sécurité pour les tests"""
     
     def __init__(self):
-        self.secret_key = "test_secret_key_do_not_use_in_production"
+        self.secret_key = "mock-test-secret"
         self.jwt_algorithm = "HS256"
         self.token_expiry = 3600  # 1 hour
         

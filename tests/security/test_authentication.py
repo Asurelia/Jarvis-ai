@@ -17,7 +17,7 @@ import requests
 from urllib.parse import urlparse, parse_qs
 
 # Configuration de test
-TEST_JWT_SECRET = "test_secret_key_dont_use_in_production"
+TEST_JWT_SECRET = "mock-test-secret"
 TEST_JWT_ALGORITHM = "HS256"
 
 

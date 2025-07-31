@@ -591,7 +591,7 @@ describe('Gestionnaire d\'authentification', () => {
 
   describe('Gestion des tokens', () => {
     test('stocke le token d\'authentification', () => {
-      const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+      const token = 'mock-token-for-testing';
       
       authManager.setToken(token);
 
@@ -616,20 +616,20 @@ describe('Gestionnaire d\'authentification', () => {
 
     test('vérifie la validité du token JWT', () => {
       // Token JWT valide avec exp dans le futur
-      const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTl9.Lp-38mkSzgIsOW5u_7yBsOCJFGS5xfBbKMkNlmQrQLk';
+      const validToken = 'mock-valid-token';
       
       expect(authManager.isTokenValid(validToken)).toBe(true);
     });
 
     test('détecte les tokens expirés', () => {
       // Token JWT expiré (exp dans le passé)
-      const expiredToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTYyMzkwMjJ9.XbPfbIHMI6arZ3Y922BhjWgQzWXcXNrz0ogtVhfEd2o';
+      const expiredToken = 'mock-expired-token';
       
       expect(authManager.isTokenValid(expiredToken)).toBe(false);
     });
 
     test('décode les informations du token', () => {
-      const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYWRtaW4ifQ.EfiMHWOZ3CovKCRA8CIZLVnSGfBqFbE9U3Y5ZPMQHJ4';
+      const token = 'mock-admin-token';
       
       const decoded = authManager.decodeToken(token);
 
@@ -723,7 +723,7 @@ describe('Gestionnaire d\'authentification', () => {
 
   describe('Permissions et rôles', () => {
     test('vérifie les permissions utilisateur', () => {
-      const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYWRtaW4iLCJwZXJtaXNzaW9ucyI6WyJyZWFkIiwid3JpdGUiLCJkZWxldGUiXX0.UqVjKKmBZZMVYKR3yNHayRNwOYVvqSGxQoNNFz-Vn9Y';
+      const token = 'mock-permissions-token';
       
       localStorageMock.getItem.mockReturnValue(token);
 
@@ -733,7 +733,7 @@ describe('Gestionnaire d\'authentification', () => {
     });
 
     test('vérifie les rôles utilisateur', () => {
-      const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYWRtaW4ifQ.EfiMHWOZ3CovKCRA8CIZLVnSGfBqFbE9U3Y5ZPMQHJ4';
+      const token = 'mock-admin-token';
       
       localStorageMock.getItem.mockReturnValue(token);
 
@@ -1156,7 +1156,7 @@ describe('Intégration API complète', () => {
 
   test('gestion de l\'authentification avec retry automatique', async () => {
     // Simuler un token expiré
-    const expiredToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTYyMzkwMjJ9.XbPfbIHMI6arZ3Y922BhjWgQzWXcXNrz0ogtVhfEd2o';
+    const expiredToken = 'mock-expired-token';
     localStorageMock.getItem.mockReturnValue(expiredToken);
 
     // Première requête échoue avec 401
