@@ -1,31 +1,32 @@
 @echo off
-REM 🧪 Script de lancement des tests JARVIS pour Windows
+REM 🧪 Script de lancement des tests JARVIS AI pour Windows
 REM Usage: run-tests.bat [type] [options]
 
-setlocal EnableDelayedExpansion
+setlocal enabledelayedexpansion
 
 REM Configuration
-set SCRIPT_DIR=%~dp0
-set PROJECT_DIR=%SCRIPT_DIR%\..\..
-set COMPOSE_FILE=%PROJECT_DIR%\docker-compose.test.yml
+set "SCRIPT_DIR=%~dp0"
+set "PROJECT_ROOT=%SCRIPT_DIR%..\.."
+set "TEST_REPORTS=%PROJECT_ROOT%\tests\reports"
+set "PYTHON=python"
+set "PYTEST=pytest"
 
-REM Couleurs (si supportées)
-set RED=[31m
-set GREEN=[32m
-set YELLOW=[33m
-set BLUE=[34m
-set PURPLE=[35m
-set NC=[0m
+REM Configuration par défaut
+set "DEFAULT_COVERAGE=--cov=services --cov=core --cov=tools"
+set "COVERAGE_THRESHOLD=80"
 
-REM Variables par défaut
-set TEST_TYPE=all
-set BUILD=false
-set CLEAN=false
-set VERBOSE=false
-set PARALLEL=false
-set COVERAGE=false
-set REPORT=false
-set NO_CACHE=false
+REM Variables de contrôle
+set "TEST_TYPE=all"
+set "VERBOSE=false"
+set "QUIET=false"
+set "FAILED_ONLY=false"
+set "PARALLEL=false"
+set "WATCH=false"
+set "COVERAGE=false"
+set "REPORT=false"
+set "NO_COVERAGE=false"
+set "DOCKER=false"
+set "CUSTOM_MARKERS="
 
 REM Fonction d'aide
 :show_help

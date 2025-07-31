@@ -7,6 +7,13 @@ import { useJarvis } from '../contexts/JarvisContext';
 import GPUStats from './GPUStats';
 import VoiceWaveform from './VoiceWaveform';
 import ScanlineEffect from './ScanlineEffect';
+import ErrorBoundary from './ErrorBoundary';
+import AudioErrorBoundary from './AudioErrorBoundary';
+import APIErrorBoundary from './APIErrorBoundary';
+import VisualizationErrorBoundary from './VisualizationErrorBoundary';
+import ErrorMonitor from './ErrorMonitor';
+import ErrorBoundaryTester from './ErrorBoundaryTester';
+import { useErrorLogger } from './ErrorLogger';
 import '../styles/jarvis-holographic.css';
 
 // Hook pour les statistiques système
@@ -128,9 +135,16 @@ const ChatPanel = ({ messages, onSendMessage, isActive }) => {
 
 // Panneau GPU Stats (wrapper)
 const GPUPanel = () => (
-  <div className="situation-panel">
-    <GPUStats className="compact-gpu-stats" />
-  </div>
+  <VisualizationErrorBoundary
+    componentName="GPU Statistics Panel"
+    title="GPU MONITORING ERROR"
+    message="The GPU statistics panel has encountered an error. Hardware monitoring may be unavailable."
+    variant="warning"
+  >
+    <div className="situation-panel">
+      <GPUStats className="compact-gpu-stats" />
+    </div>
+  </VisualizationErrorBoundary>
 );
 
 // Panneau Système
@@ -232,35 +246,47 @@ const AudioPanel = () => {
   const { state } = useJarvis();
   
   return (
-    <div className="situation-panel">
-      <div className="panel-header">
-        <h3 className="jarvis-text-glow">🎤 AUDIO INTERFACE</h3>
-        <div className={`status-indicator ${state.config.voiceMode ? 'active' : 'idle'}`} />
-      </div>
-      
-      <div className="audio-content">
-        <VoiceWaveform 
-          width={280} 
-          height={120} 
-          barCount={32} 
-          showStatus={false}
-          color="#00d4ff"
-        />
+    <AudioErrorBoundary
+      componentName="Audio Interface Panel"
+      title="AUDIO SYSTEM ERROR"
+      message="The audio interface panel has encountered an error. Voice features may be limited."
+    >
+      <div className="situation-panel">
+        <div className="panel-header">
+          <h3 className="jarvis-text-glow">🎤 AUDIO INTERFACE</h3>
+          <div className={`status-indicator ${state.config.voiceMode ? 'active' : 'idle'}`} />
+        </div>
         
-        <div className="audio-controls">
-          <div className="control-row">
-            <span>Voice Mode:</span>
-            <span style={{ color: state.config.voiceMode ? '#00ff88' : '#ff9500' }}>
-              {state.config.voiceMode ? 'ACTIVE' : 'STANDBY'}
-            </span>
-          </div>
-          <div className="control-row">
-            <span>Audio Level:</span>
-            <span style={{ color: '#00d4ff' }}>NOMINAL</span>
+        <div className="audio-content">
+          <ErrorBoundary
+            componentName="Voice Waveform"
+            showHome={false}
+            variant="info"
+          >
+            <VoiceWaveform 
+              width={280} 
+              height={120} 
+              barCount={32} 
+              showStatus={false}
+              color="#00d4ff"
+            />
+          </ErrorBoundary>
+          
+          <div className="audio-controls">
+            <div className="control-row">
+              <span>Voice Mode:</span>
+              <span style={{ color: state.config.voiceMode ? '#00ff88' : '#ff9500' }}>
+                {state.config.voiceMode ? 'ACTIVE' : 'STANDBY'}
+              </span>
+            </div>
+            <div className="control-row">
+              <span>Audio Level:</span>
+              <span style={{ color: '#00d4ff' }}>NOMINAL</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </AudioErrorBoundary>
   );
 };
 
@@ -386,24 +412,30 @@ const CommandsPanel = () => {
   };
 
   return (
-    <div className="situation-panel">
-      <div className="panel-header">
-        <h3 className="jarvis-text-glow">⚡ RAPID DEPLOY</h3>
+    <APIErrorBoundary
+      componentName="Quick Commands Panel"
+      title="COMMAND SYSTEM ERROR"
+      message="The rapid deployment panel has encountered an error. Some commands may be unavailable."
+    >
+      <div className="situation-panel">
+        <div className="panel-header">
+          <h3 className="jarvis-text-glow">⚡ RAPID DEPLOY</h3>
+        </div>
+        
+        <div className="commands-grid">
+          {quickCommands.map((cmd, index) => (
+            <button
+              key={index}
+              className="quick-command-btn"
+              style={{ borderColor: cmd.color, color: cmd.color }}
+              onClick={() => handleQuickCommand(cmd.action)}
+            >
+              {cmd.label}
+            </button>
+          ))}
+        </div>
       </div>
-      
-      <div className="commands-grid">
-        {quickCommands.map((cmd, index) => (
-          <button
-            key={index}
-            className="quick-command-btn"
-            style={{ borderColor: cmd.color, color: cmd.color }}
-            onClick={() => handleQuickCommand(cmd.action)}
-          >
-            {cmd.label}
-          </button>
-        ))}
-      </div>
-    </div>
+    </APIErrorBoundary>
   );
 };
 
@@ -458,11 +490,26 @@ const LogsPanel = () => {
 // Composant principal SituationRoom
 const SituationRoom = ({ isVisible, onClose }) => {
   const { state, actions } = useJarvis();
+  const { logError } = useErrorLogger();
   const [messages, setMessages] = useState([
     { type: 'bot', content: 'Situation Room activated. All systems online.', timestamp: new Date().toLocaleTimeString() }
   ]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showErrorMonitor, setShowErrorMonitor] = useState(false);
+  const [showErrorTester, setShowErrorTester] = useState(false);
   const containerRef = useRef(null);
+
+  // Handler d'erreur pour Situation Room
+  const handleSituationRoomError = (errorData) => {
+    logError({
+      type: 'visualization',
+      severity: 'high',
+      message: errorData.error?.message || 'Situation Room component error',
+      component: 'SituationRoom',
+      context: 'situation-room-panel',
+      stack: errorData.error?.stack
+    });
+  };
 
   // Gestion du plein écran
   const toggleFullscreen = useCallback(async () => {
@@ -567,6 +614,20 @@ const SituationRoom = ({ isVisible, onClose }) => {
           <div className="header-controls">
             <button 
               className="jarvis-button" 
+              onClick={() => setShowErrorMonitor(true)}
+              style={{ fontSize: '0.8rem', padding: '8px 16px', marginRight: '10px' }}
+            >
+              🔍 ERROR MONITOR
+            </button>
+            <button 
+              className="jarvis-button" 
+              onClick={() => setShowErrorTester(true)}
+              style={{ fontSize: '0.8rem', padding: '8px 16px', marginRight: '10px' }}
+            >
+              🧪 ERROR TESTER
+            </button>
+            <button 
+              className="jarvis-button" 
               onClick={toggleFullscreen}
               style={{ fontSize: '0.8rem', padding: '8px 16px' }}
             >
@@ -631,6 +692,18 @@ const SituationRoom = ({ isVisible, onClose }) => {
           <div className="grid-overlay" />
         </div>
       </div>
+
+      {/* Error Monitor Dialog */}
+      <ErrorMonitor
+        isVisible={showErrorMonitor}
+        onClose={() => setShowErrorMonitor(false)}
+      />
+
+      {/* Error Boundary Tester Dialog */}
+      <ErrorBoundaryTester
+        isVisible={showErrorTester}
+        onClose={() => setShowErrorTester(false)}
+      />
     </ScanlineEffect>
   );
 };

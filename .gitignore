@@ -38,12 +38,20 @@ venv.bak/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Environment variables
+# Environment variables - SECURITY CRITICAL
 .env
 .env.local
 .env.development
 .env.test
 .env.production
+.env.staging
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+backups/env/
 
 # Logs
 logs/

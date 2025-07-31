@@ -1,22 +1,29 @@
 #!/bin/bash
-
-# 🚀 Script de lancement des tests JARVIS
+# 🧪 Script de lancement des tests JARVIS AI
 # Usage: ./run-tests.sh [type] [options]
 
-set -e
+set -e  # Arrêter en cas d'erreur
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-COMPOSE_FILE="$PROJECT_DIR/docker-compose.test.yml"
-
-# Couleurs
+# Couleurs pour l'affichage
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
-NC='\033[0m'
+NC='\033[0m' # No Color
+
+# Variables
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+TEST_REPORTS="$PROJECT_ROOT/tests/reports"
+PYTHON=${PYTHON:-python3}
+PYTEST=${PYTEST:-pytest}
+
+# Configuration par défaut
+DEFAULT_MARKERS=""
+DEFAULT_VERBOSITY="-v"
+DEFAULT_COVERAGE="--cov=services --cov=core --cov=tools"
+COVERAGE_THRESHOLD=80
 
 # Fonctions utilitaires
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }

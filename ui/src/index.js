@@ -11,6 +11,7 @@ import { StyledEngineProvider } from '@mui/material/styles';
 
 import App from './App';
 import { JarvisProvider } from './contexts/JarvisContext';
+import { ErrorLoggerProvider } from './components/ErrorLogger';
 import './styles/index.css';
 
 // Thème Material-UI sombre
@@ -199,9 +200,23 @@ root.render(
       <ThemeProvider theme={darkTheme}>
         <CssBaseline />
         <BrowserRouter>
-          <JarvisProvider>
-            <App />
-          </JarvisProvider>
+          <ErrorLoggerProvider
+            config={{
+              maxLogSize: 1000,
+              enableConsoleLogging: true,
+              enableRemoteLogging: true,
+              enableLocalStorage: true,
+              autoReport: {
+                enabled: true,
+                threshold: 'high',
+                maxAutoReports: 3
+              }
+            }}
+          >
+            <JarvisProvider>
+              <App />
+            </JarvisProvider>
+          </ErrorLoggerProvider>
         </BrowserRouter>
       </ThemeProvider>
     </StyledEngineProvider>

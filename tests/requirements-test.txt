@@ -26,6 +26,11 @@ freezegun==1.2.2
 locust==2.17.0
 memory-profiler==0.61.0
 psutil==5.9.6
+pytest-benchmark==4.0.0
+
+# Docker et intégration
+docker==6.1.3
+docker-compose==1.29.2
 
 # Tests d'UI (React/JavaScript via Node.js)
 playwright==1.40.0

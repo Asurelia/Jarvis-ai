@@ -372,8 +372,11 @@ import jwt
 from datetime import datetime, timedelta
 import secrets
 
-# Clé secrète pour JWT (à générer de manière sécurisée en production)
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+# Clé secrète pour JWT - doit être la même que brain-api
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    logger.error("🚨 ERREUR SÉCURITÉ: JWT_SECRET_KEY manquante!")
+    raise ValueError("JWT_SECRET_KEY doit être configurée dans les variables d'environnement")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 
@@ -491,12 +494,20 @@ class TokenResponse(BaseModel):
 @app.post("/auth/login", response_model=TokenResponse)
 async def login(auth_request: AuthRequest):
     """Authentification et génération de token JWT"""
-    # Vérification des credentials (simplifié pour démo - à sécuriser en production)
+    # Vérification des credentials sécurisée avec variables d'environnement
     # En production: vérifier contre une base de données avec hash bcrypt
     valid_users = {
-        "jarvis": "jarvis2025!",  # À remplacer par un système sécurisé
-        "admin": os.getenv("ADMIN_PASSWORD", "admin2025!")
+        os.getenv("SYSTEM_CONTROL_JARVIS_USER", "jarvis"): os.getenv("SYSTEM_CONTROL_JARVIS_PASSWORD"),
+        os.getenv("SYSTEM_CONTROL_ADMIN_USER", "admin"): os.getenv("SYSTEM_CONTROL_ADMIN_PASSWORD")
     }
+    
+    # Vérifier que les mots de passe sont configurés
+    if not all(valid_users.values()):
+        logger.error("🚨 ERREUR SÉCURITÉ: Variables d'environnement de mots de passe manquantes!")
+        raise HTTPException(
+            status_code=500,
+            detail="Configuration de sécurité incomplète"
+        )
     
     if (auth_request.username not in valid_users or 
         auth_request.password != valid_users[auth_request.username]):

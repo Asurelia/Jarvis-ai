@@ -177,12 +177,27 @@ app = FastAPI(
 )
 
 # 🔧 Middlewares
+# Configuration CORS sécurisée
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+security_mode = os.getenv("SECURITY_MODE", "production")
+
+# En mode développement, on peut autoriser localhost
+if security_mode == "development":
+    dev_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8080"]
+    allowed_origins.extend(dev_origins)
+
+# Enlever les doublons et espaces
+allowed_origins = list(set([origin.strip() for origin in allowed_origins if origin.strip()]))
+
+logger.info(f"🌐 CORS configuré - Mode: {security_mode}, Origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # À restreindre en production
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "User-Agent"],
+    expose_headers=["Content-Length", "Content-Range"]
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)

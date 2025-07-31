@@ -9,6 +9,12 @@ import { Box, useTheme } from '@mui/material';
 // Context
 import { useJarvis } from './contexts/JarvisContext';
 
+// Error Boundaries
+import ErrorBoundary from './components/ErrorBoundary';
+import APIErrorBoundary from './components/APIErrorBoundary';
+import VisualizationErrorBoundary from './components/VisualizationErrorBoundary';
+import { ErrorLoggerProvider, useErrorLogger } from './components/ErrorLogger';
+
 // Layout components
 import Sidebar from './components/layout/Sidebar';
 import TopBar from './components/layout/TopBar';
@@ -56,6 +62,9 @@ function App() {
   const theme = useTheme();
   const { state } = useJarvis();
   const { isMobile, isTablet, isDesktop } = useResponsive();
+  
+  // Error logging hook
+  const { logError } = useErrorLogger();
   
   // État local pour l'interface
   const [sidebarWidth] = useState(280);
@@ -146,74 +155,189 @@ function App() {
     })
   };
   
+  // Handler d'erreur global pour l'app
+  const handleAppError = (errorData) => {
+    logError({
+      type: 'component',
+      severity: 'high',
+      message: errorData.error?.message || 'App component error',
+      component: 'App',
+      stack: errorData.error?.stack,
+      context: 'main-app',
+      url: window.location.href
+    });
+  };
+
   return (
-    <Box sx={mainContainerStyle}>
-      {/* Sidebar de navigation */}
-      {layoutConfig.showSidebar && (
-        <Sidebar 
-          width={sidebarWidth}
-          isElectron={isElectron}
-        />
-      )}
+    <ErrorBoundary
+      componentName="JARVIS Main Application"
+      onError={handleAppError}
+      title="JARVIS SYSTEM FAILURE"
+      message="The main JARVIS interface has encountered a critical error. Please restart the application."
+      fullHeight={true}
+      variant="critical"
+    >
+      <Box sx={mainContainerStyle}>
+        {/* Sidebar de navigation */}
+        {layoutConfig.showSidebar && (
+          <ErrorBoundary
+            componentName="Sidebar Navigation"
+            onError={handleAppError}
+            title="NAVIGATION ERROR"
+            message="The navigation sidebar has encountered an error."
+            showHome={false}
+            variant="warning"
+          >
+            <Sidebar 
+              width={sidebarWidth}
+              isElectron={isElectron}
+            />
+          </ErrorBoundary>
+        )}
       
       {/* Zone de contenu principale */}
       <Box sx={contentAreaStyle}>
-        {/* Barre supérieure (masquée sur MainChat) */}
-        {layoutConfig.showTopBar && (
-          <TopBar 
-            height={topBarHeight}
-            showMenuButton={isMobile}
-            isElectron={isElectron}
-            onChatToggle={() => setIsChatOpen(!isChatOpen)}
-            isChatOpen={isChatOpen}
-            onSituationRoomToggle={() => setIsSituationRoomOpen(!isSituationRoomOpen)}
-          />
-        )}
+          {/* Barre supérieure (masquée sur MainChat) */}
+          {layoutConfig.showTopBar && (
+            <ErrorBoundary
+              componentName="Top Navigation Bar"
+              onError={handleAppError}
+              title="TOP BAR ERROR"
+              message="The top navigation bar has encountered an error."
+              showHome={false}
+              variant="warning"
+            >
+              <TopBar 
+                height={topBarHeight}
+                showMenuButton={isMobile}
+                isElectron={isElectron}
+                onChatToggle={() => setIsChatOpen(!isChatOpen)}
+                isChatOpen={isChatOpen}
+                onSituationRoomToggle={() => setIsSituationRoomOpen(!isSituationRoomOpen)}
+              />
+            </ErrorBoundary>
+          )}
         
-        {/* Contenu principal avec routage */}
-        <Box sx={mainContentStyle}>
-          <Routes>
-            {/* Page d'accueil - Chat Principal avec Sphère 3D */}
-            <Route path="/" element={<MainChat />} />
-            <Route path="/chat" element={<MainChat />} />
+          {/* Contenu principal avec routage */}
+          <Box sx={mainContentStyle}>
+            <APIErrorBoundary
+              componentName="Main Content Routes"
+              onError={handleAppError}
+            >
+              <Routes>
+                {/* Page d'accueil - Chat Principal avec Sphère 3D */}
+                <Route path="/" element={
+                  <VisualizationErrorBoundary
+                    componentName="Main Chat Interface"
+                    onError={handleAppError}
+                  >
+                    <MainChat />
+                  </VisualizationErrorBoundary>
+                } />
+                <Route path="/chat" element={
+                  <VisualizationErrorBoundary
+                    componentName="Main Chat Interface"
+                    onError={handleAppError}
+                  >
+                    <MainChat />
+                  </VisualizationErrorBoundary>
+                } />
             
-            {/* Modules JARVIS */}
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/legacy-chat" element={<Chat />} />
-            <Route path="/vision" element={<VisionControl />} />
-            <Route path="/voice" element={<VoiceInterface />} />
-            <Route path="/autocomplete" element={<AutocompleteManager />} />
-            <Route path="/memory" element={<MemoryExplorer />} />
-            <Route path="/executor" element={<ActionExecutor />} />
+                {/* Modules JARVIS */}
+                <Route path="/dashboard" element={
+                  <ErrorBoundary componentName="Dashboard" onError={handleAppError}>
+                    <Dashboard />
+                  </ErrorBoundary>
+                } />
+                <Route path="/legacy-chat" element={
+                  <ErrorBoundary componentName="Legacy Chat" onError={handleAppError}>
+                    <Chat />
+                  </ErrorBoundary>
+                } />
+                <Route path="/vision" element={
+                  <VisualizationErrorBoundary componentName="Vision Control" onError={handleAppError}>
+                    <VisionControl />
+                  </VisualizationErrorBoundary>
+                } />
+                <Route path="/voice" element={
+                  <APIErrorBoundary componentName="Voice Interface" onError={handleAppError}>
+                    <VoiceInterface />
+                  </APIErrorBoundary>
+                } />
+                <Route path="/autocomplete" element={
+                  <APIErrorBoundary componentName="Autocomplete Manager" onError={handleAppError}>
+                    <AutocompleteManager />
+                  </APIErrorBoundary>
+                } />
+                <Route path="/memory" element={
+                  <APIErrorBoundary componentName="Memory Explorer" onError={handleAppError}>
+                    <MemoryExplorer />
+                  </APIErrorBoundary>
+                } />
+                <Route path="/executor" element={
+                  <APIErrorBoundary componentName="Action Executor" onError={handleAppError}>
+                    <ActionExecutor />
+                  </APIErrorBoundary>
+                } />
             
-            {/* Système */}
-            <Route path="/logs" element={<SystemLogs />} />
-            <Route path="/settings" element={<Settings />} />
+                {/* Système */}
+                <Route path="/logs" element={
+                  <ErrorBoundary componentName="System Logs" onError={handleAppError}>
+                    <SystemLogs />
+                  </ErrorBoundary>
+                } />
+                <Route path="/settings" element={
+                  <ErrorBoundary componentName="Settings" onError={handleAppError}>
+                    <Settings />
+                  </ErrorBoundary>
+                } />
             
-            {/* Route par défaut */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Box>
+                {/* Route par défaut */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </APIErrorBoundary>
+          </Box>
       </Box>
       
-      {/* Système de notifications */}
-      <NotificationSystem />
+        {/* Système de notifications */}
+        <ErrorBoundary
+          componentName="Notification System"
+          onError={handleAppError}
+          title="NOTIFICATION ERROR"
+          message="The notification system has encountered an error."
+          showHome={false}
+          variant="warning"
+        >
+          <NotificationSystem />
+        </ErrorBoundary>
       
-      {/* Fenêtre de chat JARVIS */}
-      <ChatWindow 
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        height={isMobile ? window.innerHeight - 100 : 600}
-        width={isMobile ? window.innerWidth - 40 : 400}
-      />
+        {/* Fenêtre de chat JARVIS */}
+        <APIErrorBoundary
+          componentName="Chat Window"
+          onError={handleAppError}
+        >
+          <ChatWindow 
+            isOpen={isChatOpen}
+            onClose={() => setIsChatOpen(false)}
+            height={isMobile ? window.innerHeight - 100 : 600}
+            width={isMobile ? window.innerWidth - 40 : 400}
+          />
+        </APIErrorBoundary>
       
-      {/* Bouton de chat flottant */}
-      <ChatButton
-        isOpen={isChatOpen}
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        bottom={20}
-        right={20}
-      />
+        {/* Bouton de chat flottant */}
+        <ErrorBoundary
+          componentName="Chat Button"
+          onError={handleAppError}
+          showHome={false}
+          variant="info"
+        >
+          <ChatButton
+            isOpen={isChatOpen}
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            bottom={20}
+            right={20}
+          />
+        </ErrorBoundary>
       
       {/* Overlay de chargement global */}
       {state.ui.loading && (
@@ -315,11 +439,16 @@ function App() {
         )}
       </Box>
       
-      {/* Situation Room - Centre de contrôle Iron Man */}
-      <SituationRoom 
-        isVisible={isSituationRoomOpen}
-        onClose={() => setIsSituationRoomOpen(false)}
-      />
+        {/* Situation Room - Centre de contrôle Iron Man */}
+        <VisualizationErrorBoundary
+          componentName="Situation Room"
+          onError={handleAppError}
+        >
+          <SituationRoom 
+            isVisible={isSituationRoomOpen}
+            onClose={() => setIsSituationRoomOpen(false)}
+          />
+        </VisualizationErrorBoundary>
 
       {/* Effets de particules en arrière-plan (optionnel) */}
       {isDesktop && !isSituationRoomOpen && (
@@ -339,7 +468,8 @@ function App() {
           }}
         />
       )}
-    </Box>
+      </Box>
+    </ErrorBoundary>
   );
 }
 

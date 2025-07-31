@@ -71,17 +71,19 @@ services:
     environment:
       - NODE_ENV=production
       - BRAIN_DEBUG=false
-      - REDIS_URL=redis://redis:6379
-      - MEMORY_DB_URL=postgresql://jarvis:${POSTGRES_PASSWORD:-jarvis2025!}@memory-db:5432/jarvis_memory
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - MEMORY_DB_URL=postgresql://${POSTGRES_USER:-jarvis}:${POSTGRES_PASSWORD}@memory-db:5432/${POSTGRES_DB:-jarvis_memory}
       - OLLAMA_URL=http://ollama:11434
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
-      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS_DEV:-http://localhost:3000,http://127.0.0.1:3000}
     volumes:
       - brain_data:/app/data:rw
       - ./logs:/app/logs:rw
     networks:
       jarvis_network:
         ipv4_address: 172.20.0.10
+      jarvis_secure:
+        ipv4_address: 172.21.0.10
     depends_on:
       redis:
         condition: service_healthy
@@ -114,24 +116,35 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis_tts
     ports:
-      - "5002:5002"
+      - "127.0.0.1:5002:5002"
     environment:
-      - TTS_MODEL=tts_models/multilingual/multi-dataset/xtts_v2
+      - TTS_MODEL=${TTS_MODEL:-tts_models/multilingual/multi-dataset/xtts_v2}
       - STREAMING_ENABLED=true
       - CHUNK_SIZE=1024
       - ANTI_HALLUCINATION=true
     volumes:
-      - audio_cache:/app/cache
+      - ${AUDIO_CACHE_PATH:-./data/audio}:/app/cache
       - ./services/tts-service/models:/app/models
     networks:
       jarvis_network:
         ipv4_address: 172.20.0.20
     restart: unless-stopped
+    user: "1000:1000"
+    deploy:
+      resources:
+        limits:
+          memory: ${TTS_SERVICE_MEMORY_LIMIT:-2048}M
+          cpus: '${TTS_SERVICE_CPU_LIMIT:-2.0}'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: ${HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${HEALTH_CHECK_RETRIES:-3}
 
   # 🎤 STT Service - Transcription temps réel
   stt-service:
@@ -140,33 +153,44 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis_stt
     ports:
-      - "5003:5003"
+      - "127.0.0.1:5003:5003"
     environment:
-      - STT_MODEL=small
+      - STT_MODEL=${STT_MODEL:-small}
       - REALTIME_PROCESSING=true
       - VAD_ENABLED=true
       - CHUNK_DURATION=20ms
     volumes:
-      - audio_cache:/app/cache
+      - ${AUDIO_CACHE_PATH:-./data/audio}:/app/cache
       - ./services/stt-service/models:/app/models
     networks:
       jarvis_network:
         ipv4_address: 172.20.0.30
     restart: unless-stopped
+    user: "1000:1000"
+    deploy:
+      resources:
+        limits:
+          memory: ${STT_SERVICE_MEMORY_LIMIT:-1024}M
+          cpus: '${STT_SERVICE_CPU_LIMIT:-1.0}'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: ${HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${HEALTH_CHECK_RETRIES:-3}
 
   # 🤖 Ollama LLM Local
   ollama:
     image: ollama/ollama:latest
     container_name: jarvis_ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - ${OLLAMA_DATA_PATH:-./data/ollama}:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_MODELS=/root/.ollama/models
@@ -174,6 +198,16 @@ services:
       jarvis_network:
         ipv4_address: 172.20.0.40
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 60s
@@ -185,43 +219,67 @@ services:
     image: redis:7-alpine
     container_name: jarvis_redis
     ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+      - "127.0.0.1:6379:6379"
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-256mb} --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-allkeys-lru} --requirepass ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
-      - ./services/redis/data:/data
+      - ${REDIS_DATA_PATH:-./data/redis}:/data
     networks:
-      jarvis_network:
-        ipv4_address: 172.20.0.50
+      jarvis_secure:
+        ipv4_address: 172.21.0.50
     restart: unless-stopped
+    user: "999:999"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: ${HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${HEALTH_CHECK_RETRIES:-3}
 
   # 🗄️ Memory Database - PostgreSQL + pgvector
   memory-db:
     image: pgvector/pgvector:pg16
     container_name: jarvis_memory_db
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
-      - POSTGRES_DB=jarvis_memory
-      - POSTGRES_USER=jarvis
-      - POSTGRES_PASSWORD=jarvis123
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+      - POSTGRES_DB=${POSTGRES_DB:-jarvis_memory}
+      - POSTGRES_USER=${POSTGRES_USER:-jarvis}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=${POSTGRES_INITDB_ARGS:---encoding=UTF-8}
     volumes:
-      - memory_data:/var/lib/postgresql/data
+      - ${MEMORY_DATA_PATH:-./data/memory}:/var/lib/postgresql/data
       - ./services/memory-db/init:/docker-entrypoint-initdb.d
     networks:
-      jarvis_network:
-        ipv4_address: 172.20.0.60
+      jarvis_secure:
+        ipv4_address: 172.21.0.60
     restart: unless-stopped
+    user: "999:999"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U jarvis -d jarvis_memory"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jarvis} -d ${POSTGRES_DB:-jarvis_memory}"]
+      interval: ${HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${HEALTH_CHECK_RETRIES:-3}
 
   # 🖥️ System Control Service - Contrôle clavier/souris sécurisé
   system-control:
@@ -232,9 +290,14 @@ services:
     ports:
       - "5004:5004"
     environment:
-      - SANDBOX_MODE=true
-      - MAX_ACTIONS_PER_MINUTE=60
-      - DISPLAY=:99
+      - SANDBOX_MODE=${SANDBOX_MODE:-true}
+      - MAX_ACTIONS_PER_MINUTE=${MAX_ACTIONS_PER_MINUTE:-60}
+      - DISPLAY=${DISPLAY:-:99}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SYSTEM_CONTROL_ADMIN_USER=${SYSTEM_CONTROL_ADMIN_USER:-admin}
+      - SYSTEM_CONTROL_ADMIN_PASSWORD=${SYSTEM_CONTROL_ADMIN_PASSWORD}
+      - SYSTEM_CONTROL_JARVIS_USER=${SYSTEM_CONTROL_JARVIS_USER:-jarvis}
+      - SYSTEM_CONTROL_JARVIS_PASSWORD=${SYSTEM_CONTROL_JARVIS_PASSWORD}
     volumes:
       - ./logs:/app/logs
       - ./services/system-control/cache:/app/cache
@@ -336,11 +399,11 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis_gpu_stats
     ports:
-      - "5009:5009"
+      - "127.0.0.1:5009:5009"
     environment:
       - PYTHONPATH=/app
-      - GPU_POLLING_INTERVAL=1
-      - LOG_LEVEL=INFO
+      - GPU_POLLING_INTERVAL=${GPU_POLLING_INTERVAL:-1}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./logs:/app/logs
       - ./services/gpu-stats-service/cache:/app/cache
@@ -348,19 +411,22 @@ services:
       jarvis_network:
         ipv4_address: 172.20.0.120
     restart: unless-stopped
+    user: "1000:1000"
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '0.5'
+          memory: ${GPU_STATS_MEMORY_LIMIT:-512}M
+          cpus: '${GPU_STATS_CPU_LIMIT:-0.5}'
         reservations:
           memory: 256M
           cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5009/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: ${HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${HEALTH_CHECK_RETRIES:-3}
       start_period: 30s
 
   # 🌐 Frontend WebRTC - Interface moderne React
