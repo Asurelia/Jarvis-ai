@@ -23,3 +23,8 @@ aiofiles==23.2.1
 # Audio format support
 ffmpeg-python==0.2.0
 pydub==0.25.1
+
+# Monitoring
+prometheus-client==0.19.0
+structlog==23.2.0
+psutil==5.9.6

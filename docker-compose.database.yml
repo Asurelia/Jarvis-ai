@@ -1,0 +1,228 @@
+# Database management services for JARVIS AI
+# Backup, monitoring, and administration services
+
+version: '3.8'
+
+networks:
+  jarvis_network:
+    external: true
+  jarvis_secure:
+    external: true
+
+volumes:
+  backup_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/backups"
+  archive_data:
+    driver: local
+    driver_opts:
+      type: none  
+      o: bind
+      device: "./data/archives"
+
+services:
+  # 💾 Database Backup Service
+  backup-service:
+    build:
+      context: ./database
+      dockerfile: Dockerfile.backup
+    container_name: jarvis_backup_service
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - POSTGRES_HOST=${POSTGRES_HOST:-memory-db}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-jarvis_memory}
+      - POSTGRES_USER=${POSTGRES_USER:-jarvis}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CHROMA_PERSIST_DIRECTORY=${CHROMA_PERSIST_DIRECTORY:-/app/memory/chroma}
+    volumes:
+      - backup_data:/app/backups
+      - archive_data:/app/archives
+      - ./logs:/app/logs
+      - ./memory:/app/memory:ro
+      - ./data/memory:/app/data/memory:ro
+    networks:
+      - jarvis_secure
+    depends_on:
+      - memory-db
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import asyncio; asyncio.run(__import__('database.scripts.backup_service').scripts.backup_service.BackupService().status())"]
+      interval: 300s  # 5 minutes
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    user: "1000:1000"
+    labels:
+      - "jarvis.service=backup"
+      - "jarvis.tier=data"
+      - "jarvis.monitoring=enabled"
+
+  # 🏥 Database Health Monitor
+  db-health-monitor:
+    build:
+      context: ./database
+      dockerfile: Dockerfile.monitor
+    container_name: jarvis_db_monitor
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - POSTGRES_HOST=${POSTGRES_HOST:-memory-db}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-jarvis_memory}
+      - POSTGRES_USER=${POSTGRES_USER:-jarvis}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-300}
+    volumes:
+      - ./logs:/app/logs
+      - ./memory:/app/memory:ro
+      - backup_data:/app/backups:ro
+    networks:
+      - jarvis_network
+      - jarvis_secure
+    depends_on:
+      - memory-db
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    user: "1000:1000"
+    labels:
+      - "jarvis.service=health-monitor"
+      - "jarvis.tier=monitoring"
+
+  # 🗂️ Data Retention Service
+  retention-service:
+    build:
+      context: ./database
+      dockerfile: Dockerfile.retention
+    container_name: jarvis_retention_service
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - POSTGRES_HOST=${POSTGRES_HOST:-memory-db}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-jarvis_memory}
+      - POSTGRES_USER=${POSTGRES_USER:-jarvis}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - RETENTION_SCHEDULE=${RETENTION_SCHEDULE:-0 5 * * *}  # Daily at 5 AM
+    volumes:
+      - archive_data:/app/archives
+      - ./logs:/app/logs
+    networks:
+      - jarvis_secure
+    depends_on:
+      - memory-db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('Retention service healthy')"]
+      interval: 300s
+      timeout: 30s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    user: "1000:1000"
+    labels:
+      - "jarvis.service=retention"
+      - "jarvis.tier=data"
+
+  # 🔧 Database Administration Interface
+  db-admin:
+    build:
+      context: ./database
+      dockerfile: Dockerfile.admin
+    container_name: jarvis_db_admin
+    ports:
+      - "127.0.0.1:8091:8091"
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - POSTGRES_HOST=${POSTGRES_HOST:-memory-db}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-jarvis_memory}
+      - POSTGRES_USER=${POSTGRES_USER:-jarvis}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - ADMIN_PASSWORD=${DB_ADMIN_PASSWORD:-changeme}
+    volumes:
+      - backup_data:/app/backups
+      - archive_data:/app/archives
+      - ./logs:/app/logs
+      - ./memory:/app/memory:ro
+    networks:
+      - jarvis_network
+      - jarvis_secure
+    depends_on:
+      - memory-db
+      - redis
+      - backup-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    user: "1000:1000"
+    labels:
+      - "jarvis.service=db-admin"
+      - "jarvis.tier=admin"

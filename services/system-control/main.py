@@ -20,6 +20,8 @@ import platform
 import time
 import json
 import hashlib
+import hmac
+import secrets
 import logging
 import asyncio
 from datetime import datetime, timedelta
@@ -28,6 +30,11 @@ import os
 import threading
 from dataclasses import dataclass
 from enum import Enum
+
+# Prometheus monitoring
+from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
+import structlog
 
 # Configuration
 SYSTEM_OS = platform.system()
@@ -72,6 +79,49 @@ app.add_middleware(
 
 # Authentification
 security = HTTPBearer()
+
+# Prometheus metrics
+registry = CollectorRegistry()
+
+# Métriques de contrôle système
+system_actions = Counter(
+    'system_control_actions_total',
+    'Total system actions executed',
+    ['action_type', 'status'],
+    registry=registry
+)
+
+action_duration = Histogram(
+    'system_control_action_duration_seconds',
+    'Time taken to execute actions',
+    ['action_type'],
+    registry=registry
+)
+
+security_violations = Counter(
+    'system_control_security_violations_total',
+    'Total security violations detected',
+    ['violation_type'],
+    registry=registry
+)
+
+active_sessions = Gauge(
+    'system_control_active_sessions',
+    'Number of active control sessions',
+    registry=registry
+)
+
+rate_limit_hits = Counter(
+    'system_control_rate_limit_hits_total',
+    'Total rate limit violations',
+    registry=registry
+)
+
+memory_usage = Gauge(
+    'system_control_memory_usage_bytes',
+    'Memory usage of system control service',
+    registry=registry
+)
 
 class ActionType(str, Enum):
     MOUSE_CLICK = "mouse_click"
@@ -484,6 +534,69 @@ class AuthRequest(BaseModel):
     password: str = Field(..., min_length=8)
     permissions: Optional[List[str]] = Field(default=["system_control"])
 
+class PasswordManager:
+    """Gestion sécurisée des mots de passe avec PBKDF2 et salt"""
+    
+    @staticmethod
+    def hash_password(password: str, salt: bytes = None) -> tuple[str, str]:
+        """Hash un mot de passe avec PBKDF2 et retourne (hash, salt)"""
+        if salt is None:
+            salt = secrets.token_bytes(32)  # 256-bit salt
+        
+        # PBKDF2 avec SHA-256, 100000 itérations (recommandé OWASP)
+        pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        
+        # Encode en base64 pour stockage
+        pwdhash_b64 = pwdhash.hex()
+        salt_b64 = salt.hex()
+        
+        return pwdhash_b64, salt_b64
+    
+    @staticmethod
+    def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
+        """Vérifie un mot de passe contre son hash"""
+        try:
+            salt = bytes.fromhex(stored_salt)
+            stored_hash_bytes = bytes.fromhex(stored_hash)
+            
+            # Recalculer le hash avec le même salt
+            pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+            
+            # Comparaison sécurisée contre timing attacks
+            return hmac.compare_digest(pwdhash, stored_hash_bytes)
+        except Exception as e:
+            logger.error(f"Erreur vérification mot de passe: {e}")
+            return False
+    
+    @staticmethod
+    def get_secure_credentials() -> dict:
+        """Récupère les credentials sécurisés depuis les variables d'environnement"""
+        credentials = {}
+        
+        # Utilisateur JARVIS
+        jarvis_user = os.getenv("SYSTEM_CONTROL_JARVIS_USER", "jarvis")
+        jarvis_pwd_hash = os.getenv("SYSTEM_CONTROL_JARVIS_PASSWORD_HASH")
+        jarvis_pwd_salt = os.getenv("SYSTEM_CONTROL_JARVIS_PASSWORD_SALT")
+        
+        if jarvis_pwd_hash and jarvis_pwd_salt:
+            credentials[jarvis_user] = {
+                "hash": jarvis_pwd_hash,
+                "salt": jarvis_pwd_salt
+            }
+        
+        # Utilisateur Admin
+        admin_user = os.getenv("SYSTEM_CONTROL_ADMIN_USER", "admin")
+        admin_pwd_hash = os.getenv("SYSTEM_CONTROL_ADMIN_PASSWORD_HASH")
+        admin_pwd_salt = os.getenv("SYSTEM_CONTROL_ADMIN_PASSWORD_SALT")
+        
+        if admin_pwd_hash and admin_pwd_salt:
+            credentials[admin_user] = {
+                "hash": admin_pwd_hash,
+                "salt": admin_pwd_salt
+            }
+        
+        return credentials
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -493,24 +606,37 @@ class TokenResponse(BaseModel):
 # Routes d'authentification
 @app.post("/auth/login", response_model=TokenResponse)
 async def login(auth_request: AuthRequest):
-    """Authentification et génération de token JWT"""
-    # Vérification des credentials sécurisée avec variables d'environnement
-    # En production: vérifier contre une base de données avec hash bcrypt
-    valid_users = {
-        os.getenv("SYSTEM_CONTROL_JARVIS_USER", "jarvis"): os.getenv("SYSTEM_CONTROL_JARVIS_PASSWORD"),
-        os.getenv("SYSTEM_CONTROL_ADMIN_USER", "admin"): os.getenv("SYSTEM_CONTROL_ADMIN_PASSWORD")
-    }
+    """Authentification et génération de token JWT avec hashage sécurisé"""
+    # Récupération des credentials hashés
+    valid_users = PasswordManager.get_secure_credentials()
     
-    # Vérifier que les mots de passe sont configurés
-    if not all(valid_users.values()):
-        logger.error("🚨 ERREUR SÉCURITÉ: Variables d'environnement de mots de passe manquantes!")
+    # Vérifier que les credentials sont configurés
+    if not valid_users:
+        logger.error("🚨 ERREUR SÉCURITÉ: Aucun credential hashé configuré!")
         raise HTTPException(
             status_code=500,
-            detail="Configuration de sécurité incomplète"
+            detail="Configuration de sécurité incomplète - credentials manquants"
         )
     
-    if (auth_request.username not in valid_users or 
-        auth_request.password != valid_users[auth_request.username]):
+    # Vérification de l'utilisateur
+    if auth_request.username not in valid_users:
+        # Délai artifiel pour éviter les attaques par timing
+        await asyncio.sleep(0.5)
+        raise HTTPException(
+            status_code=401,
+            detail="Identifiants invalides"
+        )
+    
+    user_creds = valid_users[auth_request.username]
+    
+    # Vérification du mot de passe avec hash sécurisé
+    if not PasswordManager.verify_password(
+        auth_request.password, 
+        user_creds["hash"], 
+        user_creds["salt"]
+    ):
+        # Log de la tentative d'accès
+        logger.warning(f"Tentative de connexion échouée pour {auth_request.username}")
         raise HTTPException(
             status_code=401,
             detail="Identifiants invalides"
@@ -578,6 +704,18 @@ async def health_check():
         "timestamp": time.time(),
         "authentication": "JWT enabled"
     }
+
+@app.get("/metrics")
+async def get_metrics():
+    """Endpoint Prometheus pour les métriques"""
+    # Mise à jour des métriques système
+    process = psutil.Process()
+    memory_usage.set(process.memory_info().rss)
+    
+    return Response(
+        generate_latest(registry),
+        media_type=CONTENT_TYPE_LATEST
+    )
 
 @app.post("/mouse/move")
 async def move_mouse(request: MouseMoveRequest, _: bool = Depends(verify_token)):

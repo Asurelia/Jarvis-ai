@@ -1,0 +1,121 @@
+# 📊 JARVIS AI 2025 - Configuration des sources de données Grafana
+# Auto-provisioning des datasources
+
+apiVersion: 1
+
+datasources:
+  # Prometheus - Métriques
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    orgId: 1
+    url: http://prometheus:9090
+    basicAuth: false
+    isDefault: true
+    version: 1
+    editable: true
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.48.1
+      cacheLevel: High
+      disableRecordingRules: false
+      incrementalQueryOverlapWindow: 10m
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger-uid
+
+  # Loki - Logs
+  - name: Loki
+    type: loki
+    access: proxy
+    orgId: 1
+    url: http://loki:3100
+    basicAuth: false
+    isDefault: false
+    version: 1
+    editable: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - matcherRegex: "traceID=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
+          datasourceUid: jaeger-uid
+        - matcherRegex: "request_id=([A-Za-z0-9-]+)"
+          name: RequestID
+          url: "#"
+        - matcherRegex: "conversation_id=([A-Za-z0-9-]+)"
+          name: ConversationID
+          url: "#"
+
+  # Jaeger - Tracing distribué
+  - name: Jaeger 
+    type: jaeger
+    access: proxy
+    orgId: 1
+    uid: jaeger-uid
+    url: http://jaeger:16686
+    basicAuth: false
+    isDefault: false
+    version: 1
+    editable: true
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki-uid
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        tags: ['job', 'instance', 'pod', 'namespace']
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        query: 'method="${__span.tags.method}"'
+      tracesToMetrics:
+        datasourceUid: prometheus-uid
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        tags: [
+          { key: 'service.name', value: 'service' },
+          { key: 'job' }
+        ]
+        queries: [
+          {
+            name: 'Sample query',
+            query: 'sum(rate(traces_spanmetrics_latency_bucket{$__tags}[5m]))'
+          }
+        ]
+      nodeGraph:
+        enabled: true
+      spanBar:
+        type: 'Tag'
+        tag: 'http.path'
+
+  # Node Exporter - Métriques système
+  - name: Node Exporter
+    type: prometheus
+    access: proxy
+    orgId: 1
+    url: http://prometheus:9090
+    basicAuth: false
+    isDefault: false
+    version: 1
+    editable: true
+    jsonData:
+      httpMethod: POST
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger-uid
+
+  # AlertManager - Gestion des alertes
+  - name: AlertManager
+    type: alertmanager
+    access: proxy
+    orgId: 1  
+    url: http://alertmanager:9093
+    basicAuth: false
+    isDefault: false
+    version: 1
+    editable: true
+    jsonData:
+      implementation: prometheus

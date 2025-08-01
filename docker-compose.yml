@@ -59,7 +59,7 @@ volumes:
       device: "./data/postgres"
 
 services:
-  # 🧠 Brain API - Cerveau central M.A.MM
+  # 🧠 Brain API - Cerveau central M.A.MM Optimisé
   brain-api:
     build:
       context: ./services/brain-api
@@ -76,6 +76,12 @@ services:
       - OLLAMA_URL=http://ollama:11434
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS_DEV:-http://localhost:3000,http://127.0.0.1:3000}
+      # Optimisations performance
+      - DB_POOL_SIZE=20
+      - DB_MAX_OVERFLOW=30
+      - REDIS_POOL_SIZE=50
+      - ENABLE_CIRCUIT_BREAKERS=true
+      - ENABLE_LLM_CACHE=true
     volumes:
       - brain_data:/app/data:rw
       - ./logs:/app/logs:rw
@@ -93,21 +99,42 @@ services:
     deploy:
       resources:
         limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
           memory: 1G
           cpus: '1.0'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
+      # Configuration optimisée
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 30s
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
     security_opt:
       - no-new-privileges:true
     read_only: false
     user: "1000:1000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health", "--max-time", "5"]
+      interval: 15s
+      timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 30s
+    labels:
+      - "jarvis.service=brain-api"
+      - "jarvis.tier=core"
+      - "jarvis.monitoring=enabled"
+      - "jarvis.optimized=true"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # 🗣️ TTS Service - Coqui.ai Streaming
   tts-service:

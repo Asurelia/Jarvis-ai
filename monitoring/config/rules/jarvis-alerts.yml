@@ -1,0 +1,303 @@
+# 🚨 JARVIS AI 2025 - Règles d'alerte Prometheus
+# Alertes intelligentes avec seuils adaptatifs
+
+groups:
+  # 🤖 Alertes services principaux JARVIS
+  - name: jarvis-services
+    rules:
+      # Service indisponible
+      - alert: JarvisServiceDown
+        expr: up{job=~"brain-api|tts-service|stt-service|gpu-stats-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service JARVIS {{ $labels.job }} est indisponible"
+          description: "Le service {{ $labels.job }} sur {{ $labels.instance }} est down depuis {{ $value }}s"
+          runbook_url: "http://localhost:3001/d/jarvis-runbooks"
+
+      # Latence élevée des services IA
+      - alert: JarvisAIServiceHighLatency
+        expr: rate(http_request_duration_seconds{job=~"brain-api|tts-service|stt-service"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latence élevée pour {{ $labels.job }}"
+          description: "{{ $labels.job }} a une latence de {{ $value }}s, au-dessus du seuil de 5s"
+          current_value: "{{ $value }}s"
+          threshold: "5s"
+
+      # Taux d'erreur élevé
+      - alert: JarvisServiceErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taux d'erreur élevé pour {{ $labels.job }}"
+          description: "{{ $labels.job }} a un taux d'erreur de {{ $value | humanizePercentage }}"
+
+  # 🧠 Alertes spécifiques Brain API
+  - name: brain-api-alerts
+    rules:
+      # Temps de réponse IA excessif
+      - alert: BrainAPISlowAIResponse
+        expr: brain_api_ai_response_time_seconds{quantile="0.95"} > 30
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Réponses IA lentes dans Brain API"
+          description: "95% des réponses IA prennent plus de 30s ({{ $value }}s)"
+
+      # Connexions WebSocket excessives
+      - alert: BrainAPITooManyWebSocketConnections
+        expr: brain_api_websocket_connections_active > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trop de connexions WebSocket Brain API"
+          description: "{{ $value }} connexions WebSocket actives (seuil: 100)"
+
+      # Échec d'opérations mémoire
+      - alert: BrainAPIMemoryOperationFailures
+        expr: rate(brain_api_memory_operations_total{status="error"}[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Échecs d'opérations mémoire Brain API"
+          description: "Taux d'échec des opérations mémoire: {{ $value | humanizePercentage }}"
+
+  # 🗣️ Alertes TTS Service
+  - name: tts-service-alerts
+    rules:
+      # Temps de synthèse excessif
+      - alert: TTSServiceSlowSynthesis
+        expr: tts_synthesis_duration_seconds{quantile="0.95"} > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Synthèse TTS lente"
+          description: "95% des synthèses TTS prennent plus de 10s ({{ $value }}s)"
+
+      # Sessions de streaming élevées
+      - alert: TTSServiceHighStreamingSessions
+        expr: tts_streaming_sessions_active > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trop de sessions streaming TTS"
+          description: "{{ $value }} sessions streaming actives (seuil: 20)"
+
+  # 🎤 Alertes STT Service  
+  - name: stt-service-alerts
+    rules:
+      # Temps de transcription excessif
+      - alert: STTServiceSlowTranscription
+        expr: stt_transcription_duration_seconds{quantile="0.95"} > 15
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transcription STT lente"
+          description: "95% des transcriptions prennent plus de 15s ({{ $value }}s)"
+
+      # Connexions WebSocket excessives
+      - alert: STTServiceTooManyWebSocketConnections
+        expr: stt_websocket_active_connections > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trop de connexions WebSocket STT"
+          description: "{{ $value }} connexions WebSocket actives (seuil: 50)"
+
+  # 🎮 Alertes GPU
+  - name: gpu-alerts
+    rules:
+      # Utilisation GPU élevée
+      - alert: GPUHighUtilization
+        expr: gpu_stats_gpu_utilization_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Utilisation GPU élevée"
+          description: "GPU {{ $labels.gpu_id }} utilisation: {{ $value }}% (seuil: 90%)"
+          gpu_utilization: "{{ $value }}%"
+
+      # Température GPU élevée
+      - alert: GPUHighTemperature
+        expr: gpu_stats_gpu_temperature_celsius > 80
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Température GPU critique"
+          description: "GPU {{ $labels.gpu_id }} température: {{ $value }}°C (seuil: 80°C)"
+          gpu_temperature: "{{ $value }}°C"
+
+      # Mémoire GPU faible
+      - alert: GPULowMemory
+        expr: (gpu_stats_gpu_memory_usage_bytes / gpu_stats_gpu_memory_total_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mémoire GPU faible"
+          description: "GPU {{ $labels.gpu_id }} mémoire utilisée: {{ $value | humanizePercentage }}"
+
+  # 🖥️ Alertes System Control
+  - name: system-control-alerts
+    rules:
+      # Violations de sécurité
+      - alert: SystemControlSecurityViolation
+        expr: rate(system_control_security_violations_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Violation de sécurité System Control"
+          description: "{{ $value }} violations de sécurité détectées (type: {{ $labels.violation_type }})"
+
+      # Rate limiting excessif
+      - alert: SystemControlRateLimitExceeded
+        expr: rate(system_control_rate_limit_hits_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limit dépassé System Control"
+          description: "{{ $value }} dépassements de rate limit par seconde"
+
+  # 💻 Alertes Terminal Service
+  - name: terminal-service-alerts
+    rules:
+      # Trop de sessions actives
+      - alert: TerminalServiceTooManySessions
+        expr: terminal_service_sessions_active > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trop de sessions terminal actives"
+          description: "{{ $value }} sessions terminal actives (seuil: 50)"
+
+      # Commandes qui échouent fréquemment
+      - alert: TerminalServiceHighCommandFailureRate
+        expr: rate(terminal_service_commands_executed_total{status="error"}[5m]) / rate(terminal_service_commands_executed_total[5m]) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taux d'échec élevé des commandes terminal"
+          description: "{{ $value | humanizePercentage }} des commandes échouent"
+
+  # 🐳 Alertes système et infrastructure
+  - name: infrastructure-alerts
+    rules:
+      # Utilisation CPU élevée
+      - alert: HighCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Utilisation CPU élevée"
+          description: "Utilisation CPU: {{ $value }}% (seuil: 80%)"
+
+      # Mémoire faible
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Utilisation mémoire critique"
+          description: "Utilisation mémoire: {{ $value }}% (seuil: 90%)"
+
+      # Espace disque faible
+      - alert: LowDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Espace disque faible"
+          description: "Espace disque utilisé: {{ $value }}% sur {{ $labels.mountpoint }}"
+
+  # 🗄️ Alertes bases de données
+  - name: database-alerts
+    rules:
+      # Redis down
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis indisponible"
+          description: "Redis est down depuis {{ $value }}s"
+
+      # PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL indisponible"  
+          description: "PostgreSQL est down depuis {{ $value }}s"
+
+      # Trop de connexions PostgreSQL
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trop de connexions PostgreSQL"
+          description: "{{ $value }} connexions actives (seuil: 80)"
+
+  # 🔍 Alertes métriques personnalisées
+  - name: custom-business-alerts
+    rules:
+      # Pas de conversations depuis longtemps
+      - alert: NoConversationsRecently
+        expr: rate(brain_api_conversations_started_total[1h]) == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aucune conversation JARVIS récente"
+          description: "Aucune nouvelle conversation depuis 30 minutes"
+
+      # Échec de synthèse vocale fréquent
+      - alert: FrequentTTSFailures
+        expr: rate(tts_service_errors_total{error_type="synthesis"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Échecs de synthèse TTS fréquents"
+          description: "{{ $value }} échecs de synthèse TTS par seconde"
+
+      # Performance globale dégradée
+      - alert: JarvisOverallPerformanceDegraded
+        expr: |
+          (
+            rate(brain_api_ai_response_time_seconds[5m]) > 10 or
+            rate(tts_synthesis_duration_seconds[5m]) > 5 or  
+            rate(stt_transcription_duration_seconds[5m]) > 3
+          )
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Performance globale JARVIS dégradée"
+          description: "Un ou plusieurs services JARVIS montrent des performances dégradées"

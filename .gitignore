@@ -149,3 +149,46 @@ auth_tokens.json
 # Docker secrets
 docker-secrets/
 docker-compose.override.yml
+
+# 🔒 SECURITY FILES - CRITICAL - NEVER COMMIT
+.env.security
+.env.secrets
+*_password_hash*
+*_password_salt*
+ssl/
+certificates/
+private_keys/
+security-config/
+oauth_secrets/
+jwt_keys/
+encryption_keys/
+backup_encryption_keys/
+*.security
+security_backup.*/
+
+# Authentication & session files
+session_keys/
+auth_cache/
+token_cache/
+
+# Backup files that might contain secrets
+backups/
+*.backup
+*.bak
+security_*.tar.gz
+
+# Configuration files with production secrets
+nginx/htpasswd
+nginx/*.crt
+nginx/*.key
+nginx/ssl.*/
+
+# Monitoring and security logs with sensitive data
+security-monitor.log
+auth_failures.log
+intrusion_detection.log
+security_events.log
+
+# Let's Encrypt certificates
+certbot/
+letsencrypt/

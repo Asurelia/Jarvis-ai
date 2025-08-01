@@ -1,0 +1,60 @@
+# 📈 JARVIS AI 2025 - Configuration de provisioning des dashboards Grafana
+# Auto-provisioning des dashboards personnalisés
+
+apiVersion: 1
+
+providers:
+  # Dashboards principaux JARVIS
+  - name: 'jarvis-main'
+    orgId: 1
+    folder: 'JARVIS AI'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/main
+
+  # Dashboards services IA
+  - name: 'jarvis-ai-services'
+    orgId: 1
+    folder: 'AI Services'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/ai-services
+
+  # Dashboards infrastructure
+  - name: 'jarvis-infrastructure'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/infrastructure
+
+  # Dashboards sécurité
+  - name: 'jarvis-security'
+    orgId: 1
+    folder: 'Security'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/security
+
+  # Dashboards logs
+  - name: 'jarvis-logs'
+    orgId: 1
+    folder: 'Logs & Traces'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/logs

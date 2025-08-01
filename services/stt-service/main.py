@@ -4,7 +4,7 @@ Service de reconnaissance vocale avec Whisper
 """
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 import uvicorn
 import whisper
 import numpy as np
@@ -20,6 +20,10 @@ from pathlib import Path
 import tempfile
 import os
 from loguru import logger
+
+# Prometheus monitoring
+from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
+import structlog
 
 # Configuration
 MODEL_NAME = os.getenv("STT_MODEL", "base")
@@ -50,6 +54,58 @@ app = FastAPI(
     description="Service de reconnaissance vocale temps réel avec Whisper"
 )
 
+# Prometheus metrics
+registry = CollectorRegistry()
+
+# Métriques de transcription
+stt_requests = Counter(
+    'stt_requests_total', 
+    'Total STT requests', 
+    ['method', 'status'],
+    registry=registry
+)
+
+stt_duration = Histogram(
+    'stt_transcription_duration_seconds',
+    'Time spent transcribing audio',
+    ['model', 'language'],
+    registry=registry
+)
+
+stt_audio_duration = Histogram(
+    'stt_audio_duration_seconds',
+    'Duration of processed audio files',
+    ['language'],
+    registry=registry
+)
+
+# Métriques de performance
+stt_model_load_time = Gauge(
+    'stt_model_load_time_seconds',
+    'Time taken to load the STT model',
+    registry=registry
+)
+
+stt_active_connections = Gauge(
+    'stt_websocket_active_connections',
+    'Number of active WebSocket connections',
+    registry=registry
+)
+
+stt_memory_usage = Gauge(
+    'stt_memory_usage_bytes',
+    'Memory usage of STT service',
+    registry=registry
+)
+
+# Métriques d'erreur
+stt_errors = Counter(
+    'stt_errors_total',
+    'Total STT errors',
+    ['error_type'],
+    registry=registry
+)
+
 # Global model instance
 whisper_model = None
 
@@ -62,14 +118,24 @@ class STTService:
         """Charger le modèle Whisper"""
         try:
             logger.info(f"Chargement du modèle Whisper {MODEL_NAME} sur {DEVICE}")
+            start_time = time.time()
+            
             self.model = whisper.load_model(MODEL_NAME, device=DEVICE)
-            logger.success(f"Modèle {MODEL_NAME} chargé avec succès")
+            
+            load_time = time.time() - start_time
+            stt_model_load_time.set(load_time)
+            
+            logger.success(f"Modèle {MODEL_NAME} chargé avec succès en {load_time:.2f}s")
         except Exception as e:
             logger.error(f"Erreur lors du chargement du modèle: {e}")
+            stt_errors.labels(error_type='model_loading').inc()
             raise
     
     def transcribe_audio(self, audio_data: np.ndarray, language: Optional[str] = None) -> Dict[str, Any]:
         """Transcrire l'audio avec Whisper"""
+        start_time = time.time()
+        audio_duration = len(audio_data) / SAMPLE_RATE
+        
         try:
             # Options de transcription
             options = {
@@ -82,14 +148,22 @@ class STTService:
             # Transcription
             result = self.model.transcribe(audio_data, **options)
             
+            # Métriques
+            transcription_time = time.time() - start_time
+            detected_language = result.get("language", language or "unknown")
+            
+            stt_duration.labels(model=MODEL_NAME, language=detected_language).observe(transcription_time)
+            stt_audio_duration.labels(language=detected_language).observe(audio_duration)
+            
             return {
                 "text": result["text"].strip(),
-                "language": result.get("language", language),
+                "language": detected_language,
                 "segments": result.get("segments", []),
-                "duration": len(audio_data) / SAMPLE_RATE
+                "duration": audio_duration
             }
         except Exception as e:
             logger.error(f"Erreur de transcription: {e}")
+            stt_errors.labels(error_type='transcription').inc()
             raise
 
     def process_audio_file(self, audio_bytes: bytes, format: str = "wav") -> np.ndarray:
@@ -134,6 +208,19 @@ async def health_check():
         "timestamp": time.time()
     }
 
+@app.get("/metrics")
+async def get_metrics():
+    """Endpoint Prometheus pour les métriques"""
+    # Mise à jour des métriques de mémoire
+    import psutil
+    process = psutil.Process()
+    stt_memory_usage.set(process.memory_info().rss)
+    
+    return Response(
+        generate_latest(registry),
+        media_type=CONTENT_TYPE_LATEST
+    )
+
 @app.get("/models")
 async def list_models():
     """Liste des modèles disponibles"""
@@ -159,8 +246,11 @@ async def transcribe_audio(
 ):
     """Transcrire un fichier audio en texte"""
     try:
+        stt_requests.labels(method='transcribe', status='started').inc()
+        
         # Vérifier le type de fichier
         if not audio.content_type.startswith("audio/"):
+            stt_requests.labels(method='transcribe', status='error').inc()
             raise HTTPException(400, "Le fichier doit être un fichier audio")
         
         # Lire le fichier
@@ -180,6 +270,8 @@ async def transcribe_audio(
         # Transcrire
         result = stt_service.transcribe_audio(audio_data, language)
         
+        stt_requests.labels(method='transcribe', status='success').inc()
+        
         return {
             "status": "success",
             "filename": audio.filename,
@@ -191,6 +283,7 @@ async def transcribe_audio(
         }
         
     except Exception as e:
+        stt_requests.labels(method='transcribe', status='error').inc()
         logger.error(f"Erreur de transcription: {e}")
         raise HTTPException(500, f"Erreur de transcription: {str(e)}")
 
@@ -198,6 +291,7 @@ async def transcribe_audio(
 async def websocket_stream(websocket: WebSocket):
     """WebSocket pour transcription en temps réel"""
     await websocket.accept()
+    stt_active_connections.inc()
     logger.info("Nouvelle connexion WebSocket STT")
     
     try:
@@ -229,13 +323,17 @@ async def websocket_stream(websocket: WebSocket):
                     })
                 except Exception as e:
                     logger.error(f"Erreur de transcription chunk: {e}")
+                    stt_errors.labels(error_type='websocket_transcription').inc()
                 
                 # Vider le buffer traité
                 audio_buffer = audio_buffer[SAMPLE_RATE * 2:]
                 
     except WebSocketDisconnect:
+        stt_active_connections.dec()
         logger.info("Déconnexion WebSocket STT")
     except Exception as e:
+        stt_active_connections.dec()
+        stt_errors.labels(error_type='websocket_error').inc()
         logger.error(f"Erreur WebSocket: {e}")
         await websocket.close()
 

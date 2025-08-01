@@ -1,18 +1,33 @@
 """
 🧮 Module Mémoire Hybride - JARVIS Brain API
 Système de mémoire statique + dynamique + épisodique
+Optimisé avec Connection Pooling et Cache Redis
 """
 
 import asyncio
 import json
 import time
 import uuid
+import hashlib
 from typing import Dict, List, Optional, Any, Tuple
 import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 import numpy as np
 from collections import defaultdict, deque
+from urllib.parse import urlparse
+
+# Database imports
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.pool import QueuePool
+from sqlalchemy import text, Index
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.types import String, DateTime, Integer, Float, JSON, Text
+
+# Redis imports
+import redis.asyncio as redis
+from redis.asyncio.connection import ConnectionPool as RedisConnectionPool
 
 logger = logging.getLogger(__name__)
 
@@ -44,19 +59,64 @@ class UserProfile:
     created_at: datetime
     updated_at: datetime
 
+# SQLAlchemy Models
+class Base(DeclarativeBase):
+    pass
+
+class MemoryEntryModel(Base):
+    __tablename__ = "memory_entries"
+    
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    type: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[List[float]] = mapped_column(JSON, nullable=True)
+    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    access_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_accessed: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    relevance_score: Mapped[float] = mapped_column(Float, default=1.0)
+    
+    # Indexes for performance
+    __table_args__ = (
+        Index('idx_memory_user_type', 'metadata', 'type'),
+        Index('idx_memory_created', 'created_at'),
+        Index('idx_memory_relevance', 'relevance_score'),
+    )
+
+class UserProfileModel(Base):
+    __tablename__ = "user_profiles"
+    
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    preferences: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    personality_traits: Mapped[Dict[str, float]] = mapped_column(JSON, nullable=False)
+    interaction_patterns: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    expertise_areas: Mapped[List[str]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+
 class HybridMemoryManager:
     """
-    Gestionnaire de mémoire hybride implémentant:
+    Gestionnaire de mémoire hybride optimisé implémentant:
     - Mémoire statique: profil utilisateur, préférences
     - Mémoire dynamique: évolution tous les 5 interactions
     - Mémoire épisodique: historique des expériences
+    - Connection Pooling PostgreSQL et Redis
+    - Cache multi-niveaux avec TTL
     """
     
     def __init__(self, db_url: str, redis_url: str):
         self.db_url = db_url
         self.redis_url = redis_url
         
-        # Stockage en mémoire (sera connecté aux vraies DB plus tard)
+        # Connection Pools
+        self.db_engine = None
+        self.db_session_factory = None
+        self.redis_pool = None
+        self.redis_client = None
+        
+        # Cache en mémoire local (L1 cache)
         self.static_memory: Dict[str, MemoryEntry] = {}
         self.dynamic_memory: Dict[str, MemoryEntry] = {}
         self.episodic_memory: deque = deque(maxlen=1000)
@@ -66,6 +126,21 @@ class HybridMemoryManager:
         self.dynamic_update_interval = 5  # interactions
         self.max_episodic_entries = 1000
         self.vector_dimension = 384
+        
+        # Cache TTL (seconds)
+        self.static_cache_ttl = 86400 * 30  # 30 days
+        self.dynamic_cache_ttl = 3600  # 1 hour
+        self.episodic_cache_ttl = 86400  # 1 day
+        self.query_cache_ttl = 300  # 5 minutes
+        
+        # Connection Pool Configuration
+        self.db_pool_size = 20
+        self.db_max_overflow = 30
+        self.db_pool_timeout = 30
+        self.db_pool_recycle = 3600
+        
+        self.redis_pool_size = 50
+        self.redis_pool_timeout = 10
         
         # Compteurs et état
         self.interaction_count = 0
@@ -85,31 +160,176 @@ class HybridMemoryManager:
         logger.info("🧮 Memory Manager initialisé")
     
     async def initialize(self):
-        """Initialisation asynchrone du gestionnaire de mémoire"""
-        logger.info("🚀 Initialisation Memory Manager...")
+        """Initialisation asynchrone du gestionnaire de mémoire avec connection pooling"""
+        logger.info("🚀 Initialisation Memory Manager avec Connection Pooling...")
         
-        # Simulation connexion DB
-        await asyncio.sleep(0.1)
-        
-        # Charger les profils utilisateur existants
-        await self._load_user_profiles()
-        
-        # Charger la mémoire statique
-        await self._load_static_memory()
-        
-        # Charger l'historique récent
-        await self._load_recent_episodic_memory()
-        
-        logger.info(f"✅ Memory Manager prêt - {self.stats['total_memories']} entrées chargées")
+        try:
+            # 1. Initialiser PostgreSQL Connection Pool
+            await self._initialize_postgres_pool()
+            
+            # 2. Initialiser Redis Connection Pool
+            await self._initialize_redis_pool()
+            
+            # 3. Créer les tables si nécessaire
+            await self._create_tables()
+            
+            # 4. Charger les données depuis les DB avec cache
+            await self._load_user_profiles()
+            await self._load_static_memory()
+            await self._load_recent_episodic_memory()
+            
+            # 5. Précharger le cache Redis
+            await self._preload_redis_cache()
+            
+            logger.info(f"✅ Memory Manager prêt avec pools - PostgreSQL: {self.db_pool_size}, Redis: {self.redis_pool_size}")
+            logger.info(f"📊 {self.stats['total_memories']} entrées chargées")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur initialisation Memory Manager: {e}")
+            await self.shutdown()
+            raise
     
     async def shutdown(self):
-        """Arrêt propre du gestionnaire"""
+        """Arrêt propre du gestionnaire avec fermeture des pools"""
         logger.info("🛑 Arrêt Memory Manager...")
         
-        # Sauvegarder l'état avant fermeture
-        await self._save_all_memories()
-        
-        self._log_final_stats()
+        try:
+            # Sauvegarder l'état avant fermeture
+            await self._save_all_memories()
+            
+            # Vider le cache Redis
+            if self.redis_client:
+                await self.redis_client.flushdb()
+            
+            # Fermer les connexions Redis
+            if self.redis_client:
+                await self.redis_client.aclose()
+                logger.info("🔴 Redis connection pool fermé")
+            
+            # Fermer les connexions PostgreSQL
+            if self.db_engine:
+                await self.db_engine.dispose()
+                logger.info("🔴 PostgreSQL connection pool fermé")
+            
+            self._log_final_stats()
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de l'arrêt: {e}")
+    
+    async def _initialize_postgres_pool(self):
+        """Initialiser le pool de connexions PostgreSQL"""
+        try:
+            # Convertir l'URL PostgreSQL pour asyncpg
+            parsed = urlparse(self.db_url)
+            async_url = (
+                f"postgresql+asyncpg://{parsed.username}:{parsed.password}"
+                f"@{parsed.hostname}:{parsed.port}{parsed.path}"
+            )
+            
+            # Créer le moteur avec pool optimisé
+            self.db_engine = create_async_engine(
+                async_url,
+                poolclass=QueuePool,
+                pool_size=self.db_pool_size,
+                max_overflow=self.db_max_overflow,
+                pool_timeout=self.db_pool_timeout,
+                pool_recycle=self.db_pool_recycle,
+                pool_pre_ping=True,  # Valider les connexions
+                echo=False  # Pas de logs SQL en production
+            )
+            
+            # Créer la factory de sessions
+            self.db_session_factory = async_sessionmaker(
+                self.db_engine,
+                class_=AsyncSession,
+                expire_on_commit=False
+            )
+            
+            logger.info(f"✅ PostgreSQL Connection Pool créé - Size: {self.db_pool_size}, Max: {self.db_pool_size + self.db_max_overflow}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur création PostgreSQL pool: {e}")
+            raise
+    
+    async def _initialize_redis_pool(self):
+        """Initialiser le pool de connexions Redis"""
+        try:
+            # Créer le pool Redis
+            self.redis_pool = RedisConnectionPool.from_url(
+                self.redis_url,
+                max_connections=self.redis_pool_size,
+                socket_timeout=self.redis_pool_timeout,
+                socket_connect_timeout=self.redis_pool_timeout,
+                retry_on_timeout=True,
+                health_check_interval=30
+            )
+            
+            # Créer le client Redis
+            self.redis_client = redis.Redis(
+                connection_pool=self.redis_pool,
+                decode_responses=True
+            )
+            
+            # Tester la connexion
+            await self.redis_client.ping()
+            
+            logger.info(f"✅ Redis Connection Pool créé - Size: {self.redis_pool_size}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur création Redis pool: {e}")
+            raise
+    
+    async def _create_tables(self):
+        """Créer les tables PostgreSQL si nécessaire"""
+        try:
+            async with self.db_engine.begin() as conn:
+                # Créer l'extension pgvector si nécessaire
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                
+                # Créer toutes les tables
+                await conn.run_sync(Base.metadata.create_all)
+                
+            logger.info("✅ Tables PostgreSQL créées/vérifiées")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur création tables: {e}")
+            raise
+    
+    async def _preload_redis_cache(self):
+        """Précharger le cache Redis avec les données fréquemment utilisées"""
+        try:
+            # Précharger les profils utilisateur actifs
+            active_users = await self._get_active_users()
+            for user_id in active_users:
+                cache_key = f"user_profile:{user_id}"
+                if user_id in self.user_profiles:
+                    await self.redis_client.setex(
+                        cache_key,
+                        self.static_cache_ttl,
+                        json.dumps(asdict(self.user_profiles[user_id]), default=str)
+                    )
+            
+            logger.info(f"✅ Cache Redis préchargé - {len(active_users)} profils utilisateur")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur préchargement cache: {e}")
+    
+    async def _get_active_users(self, days: int = 7) -> List[str]:
+        """Obtenir la liste des utilisateurs actifs des N derniers jours"""
+        try:
+            async with self.db_session_factory() as session:
+                query = text("""
+                    SELECT DISTINCT metadata->>'user_id' as user_id
+                    FROM memory_entries 
+                    WHERE created_at >= NOW() - INTERVAL ':days days'
+                    AND metadata->>'user_id' IS NOT NULL
+                    LIMIT 100
+                """)
+                result = await session.execute(query, {"days": days})
+                return [row[0] for row in result.fetchall()]
+        except Exception as e:
+            logger.error(f"❌ Erreur récupération utilisateurs actifs: {e}")
+            return []
     
     async def store_static_memory(self, user_id: str, key: str, content: str, metadata: Optional[Dict] = None) -> str:
         """
@@ -140,12 +360,45 @@ class HybridMemoryManager:
             updated_at=datetime.now()
         )
         
+        # Stocker en base de données
+        try:
+            async with self.db_session_factory() as session:
+                db_entry = MemoryEntryModel(
+                    id=memory_id,
+                    type="static",
+                    content=content,
+                    embedding=entry.embedding,
+                    metadata=entry.metadata,
+                    created_at=entry.created_at,
+                    updated_at=entry.updated_at,
+                    access_count=entry.access_count,
+                    last_accessed=entry.last_accessed,
+                    relevance_score=entry.relevance_score
+                )
+                session.add(db_entry)
+                await session.commit()
+        except Exception as e:
+            logger.error(f"❌ Erreur stockage PostgreSQL: {e}")
+        
+        # Stocker dans le cache local (L1)
         self.static_memory[memory_id] = entry
+        
+        # Stocker dans Redis (L2)
+        try:
+            cache_key = f"static_memory:{memory_id}"
+            await self.redis_client.setex(
+                cache_key,
+                self.static_cache_ttl,
+                json.dumps(asdict(entry), default=str)
+            )
+        except Exception as e:
+            logger.error(f"❌ Erreur cache Redis: {e}")
+        
         self.stats["static_memories"] += 1
         self.stats["total_memories"] += 1
         self.stats["memory_updates"] += 1
         
-        logger.info(f"💾 Mémoire statique stockée: {key} pour {user_id}")
+        logger.info(f"💾 Mémoire statique stockée (3 niveaux): {key} pour {user_id}")
         return memory_id
     
     async def store_dynamic_memory(self, user_id: str, content: str, context: Optional[Dict] = None) -> str:
@@ -395,8 +648,16 @@ class HybridMemoryManager:
         except Exception as e:
             logger.warning(f"Erreur lors de la génération d'embedding: {e}")
         
+        # Vérifier d'abord le cache des embeddings
+        try:
+            embedding_key = f"embedding:{hashlib.md5(text.encode()).hexdigest()}"
+            cached_embedding = await self.redis_client.get(embedding_key)
+            if cached_embedding:
+                return json.loads(cached_embedding)
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur lecture cache embedding: {e}")
+        
         # Fallback: embedding basé sur TF-IDF simplifié
-        import hashlib
         import math
         
         # Tokenization simple
@@ -420,6 +681,17 @@ class HybridMemoryManager:
         norm = math.sqrt(sum(x*x for x in embedding))
         if norm > 0:
             embedding = [x/norm for x in embedding]
+        
+        # Mise en cache de l'embedding
+        try:
+            embedding_key = f"embedding:{hashlib.md5(text.encode()).hexdigest()}"
+            await self.redis_client.setex(
+                embedding_key,
+                3600,  # 1 heure
+                json.dumps(embedding)
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur cache embedding: {e}")
         
         return embedding
     
@@ -703,6 +975,66 @@ class HybridMemoryManager:
             "interaction_count": self.interaction_count,
             "last_dynamic_update": self.last_dynamic_update
         }
+    
+    async def _get_candidates_from_db(self, user_id: str, memory_types: List[str], query_embedding: List[float]) -> List[MemoryEntry]:
+        """Récupérer les candidats depuis PostgreSQL avec requête optimisée"""
+        try:
+            async with self.db_session_factory() as session:
+                # Requête optimisée avec similarité vectorielle si disponible
+                placeholders = ','.join([f"'{t}'" for t in memory_types])
+                query = text(f"""
+                    SELECT id, type, content, embedding, metadata, created_at, updated_at, 
+                           access_count, last_accessed, relevance_score
+                    FROM memory_entries 
+                    WHERE metadata->>'user_id' = :user_id 
+                    AND type IN ({placeholders})
+                    AND embedding IS NOT NULL
+                    ORDER BY 
+                        relevance_score DESC,
+                        last_accessed DESC NULLS LAST,
+                        created_at DESC
+                    LIMIT 50
+                """)
+                
+                result = await session.execute(query, {"user_id": user_id})
+                rows = result.fetchall()
+                
+                candidates = []
+                for row in rows:
+                    entry = MemoryEntry(
+                        id=row[0],
+                        type=row[1],
+                        content=row[2],
+                        embedding=row[3],
+                        metadata=row[4],
+                        created_at=row[5],
+                        updated_at=row[6],
+                        access_count=row[7],
+                        last_accessed=row[8],
+                        relevance_score=row[9]
+                    )
+                    candidates.append(entry)
+                
+                return candidates
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur récupération DB: {e}")
+            return []
+    
+    async def _update_access_stats_batch(self, memory_ids: List[str]):
+        """Mettre à jour les statistiques d'accès en lot"""
+        try:
+            async with self.db_session_factory() as session:
+                query = text("""
+                    UPDATE memory_entries 
+                    SET access_count = access_count + 1,
+                        last_accessed = NOW()
+                    WHERE id = ANY(:memory_ids)
+                """)
+                await session.execute(query, {"memory_ids": memory_ids})
+                await session.commit()
+        except Exception as e:
+            logger.error(f"❌ Erreur mise à jour stats: {e}")
     
     def _log_final_stats(self):
         """Logger les statistiques finales"""

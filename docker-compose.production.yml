@@ -1,0 +1,479 @@
+# 🔒 JARVIS v2.0 - Configuration Production Sécurisée HTTPS
+# Infrastructure sécurisée avec SSL/TLS, reverse proxy et isolation réseau
+
+networks:
+  jarvis_frontend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+  
+  jarvis_backend:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
+  
+  jarvis_database:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+
+volumes:
+  brain_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "/var/jarvis/data/brain"
+  memory_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "/var/jarvis/data/memory"
+  ollama_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "/var/jarvis/data/ollama"
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "/var/jarvis/data/redis"
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "/var/jarvis/data/postgres"
+  ssl_certs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "/var/jarvis/ssl"
+  nginx_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "/var/jarvis/logs/nginx"
+
+services:
+  # 🛡️ Reverse Proxy Nginx avec SSL
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: jarvis_nginx_proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/production.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl.conf:/etc/nginx/conf.d/ssl.conf:ro
+      - ssl_certs:/etc/ssl/certs:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      jarvis_frontend:
+        ipv4_address: 172.22.0.10
+      jarvis_backend:
+        ipv4_address: 172.23.0.10
+    depends_on:
+      - brain-api
+      - frontend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "101:101"  # nginx user
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🔐 SSL Certificate Manager (Let's Encrypt)
+  certbot:
+    image: certbot/certbot:latest
+    container_name: jarvis_certbot
+    volumes:
+      - ssl_certs:/etc/letsencrypt
+      - ./certbot/webroot:/var/www/certbot:rw
+    networks:
+      - jarvis_frontend
+    environment:
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL}
+      - CERTBOT_DOMAIN=${CERTBOT_DOMAIN}
+    command: >
+      sh -c "
+      if [ ! -f /etc/letsencrypt/live/${CERTBOT_DOMAIN}/fullchain.pem ]; then
+        certbot certonly --webroot -w /var/www/certbot 
+          --email ${CERTBOT_EMAIL} 
+          --agree-tos --no-eff-email 
+          -d ${CERTBOT_DOMAIN};
+      fi;
+      trap exit TERM; 
+      while :; do 
+        certbot renew; 
+        sleep 12h & wait $!; 
+      done"
+    restart: unless-stopped
+    profiles:
+      - ssl
+
+  # 🧠 Brain API - Sécurisé en backend
+  brain-api:
+    build:
+      context: ./services/brain-api
+      dockerfile: Dockerfile
+    container_name: jarvis_brain_prod
+    expose:
+      - "5000"
+    environment:
+      - NODE_ENV=production
+      - BRAIN_DEBUG=false
+      - SECURITY_MODE=production
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - MEMORY_DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@memory-db:5432/${POSTGRES_DB}
+      - OLLAMA_URL=http://ollama:11434
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ALLOWED_ORIGINS=https://${CERTBOT_DOMAIN}
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW=900  # 15 minutes
+    volumes:
+      - brain_data:/app/data:rw
+      - /var/jarvis/logs:/app/logs:rw
+    networks:
+      jarvis_backend:
+        ipv4_address: 172.23.0.20
+      jarvis_database:
+        ipv4_address: 172.24.0.20
+    depends_on:
+      redis:
+        condition: service_healthy
+      memory-db:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+      replicas: 2  # High availability
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    user: "1000:1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # 🗣️ TTS Service - Backend sécurisé
+  tts-service:
+    build:
+      context: ./services/tts-service
+      dockerfile: Dockerfile
+    container_name: jarvis_tts_prod
+    expose:
+      - "5002"
+    environment:
+      - TTS_MODEL=${TTS_MODEL:-tts_models/multilingual/multi-dataset/xtts_v2}
+      - STREAMING_ENABLED=true
+      - CHUNK_SIZE=1024
+      - ANTI_HALLUCINATION=true
+      - SECURITY_MODE=production
+    volumes:
+      - /var/jarvis/data/audio:/app/cache:rw
+      - ./services/tts-service/models:/app/models:ro
+    networks:
+      jarvis_backend:
+        ipv4_address: 172.23.0.30
+    restart: unless-stopped
+    user: "1000:1000"
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🎤 STT Service - Backend sécurisé
+  stt-service:
+    build:
+      context: ./services/stt-service
+      dockerfile: Dockerfile
+    container_name: jarvis_stt_prod
+    expose:
+      - "5003"
+    environment:
+      - STT_MODEL=${STT_MODEL:-small}
+      - REALTIME_PROCESSING=true
+      - VAD_ENABLED=true
+      - CHUNK_DURATION=20ms
+      - SECURITY_MODE=production
+    volumes:
+      - /var/jarvis/data/audio:/app/cache:rw
+      - ./services/stt-service/models:/app/models:ro
+    networks:
+      jarvis_backend:
+        ipv4_address: 172.23.0.40
+    restart: unless-stopped
+    user: "1000:1000"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🤖 Ollama LLM - Isolé backend
+  ollama:
+    image: ollama/ollama:latest
+    container_name: jarvis_ollama_prod
+    expose:
+      - "11434"
+    volumes:
+      - ollama_data:/root/.ollama:rw
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_MODELS=/root/.ollama/models
+    networks:
+      jarvis_backend:
+        ipv4_address: 172.23.0.50
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+
+  # 🧮 Redis - Base de données isolée
+  redis:
+    image: redis:7-alpine
+    container_name: jarvis_redis_prod
+    expose:
+      - "6379"
+    command: >
+      redis-server 
+      --appendonly yes 
+      --maxmemory 512mb 
+      --maxmemory-policy allkeys-lru 
+      --requirepass ${REDIS_PASSWORD}
+      --bind 0.0.0.0
+      --protected-mode yes
+      --port 6379
+      --tcp-backlog 511
+      --timeout 0
+      --tcp-keepalive 300
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data:rw
+    networks:
+      jarvis_database:
+        ipv4_address: 172.24.0.30
+    restart: unless-stopped
+    user: "999:999"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🗄️ PostgreSQL - Base de données isolée
+  memory-db:
+    image: pgvector/pgvector:pg16
+    container_name: jarvis_memory_db_prod
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --auth-host=scram-sha-256
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:rw
+      - ./services/memory-db/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      jarvis_database:
+        ipv4_address: 172.24.0.40
+    restart: unless-stopped
+    user: "999:999"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🖥️ System Control Service - Accès restreint
+  system-control:
+    build:
+      context: ./services/system-control
+      dockerfile: Dockerfile
+    container_name: jarvis_system_control_prod
+    expose:
+      - "5004"
+    environment:
+      - SANDBOX_MODE=false  # Production mode
+      - MAX_ACTIONS_PER_MINUTE=30  # Plus restrictif
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SYSTEM_CONTROL_ADMIN_PASSWORD_HASH=${SYSTEM_CONTROL_ADMIN_PASSWORD_HASH}
+      - SYSTEM_CONTROL_ADMIN_PASSWORD_SALT=${SYSTEM_CONTROL_ADMIN_PASSWORD_SALT}
+      - SYSTEM_CONTROL_JARVIS_PASSWORD_HASH=${SYSTEM_CONTROL_JARVIS_PASSWORD_HASH}
+      - SYSTEM_CONTROL_JARVIS_PASSWORD_SALT=${SYSTEM_CONTROL_JARVIS_PASSWORD_SALT}
+    volumes:
+      - /var/jarvis/logs:/app/logs:rw
+      - ./services/system-control/cache:/app/cache:rw
+    networks:
+      jarvis_backend:
+        ipv4_address: 172.23.0.60
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - SYS_PTRACE
+
+  # 🌐 Frontend - Interface web sécurisée
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.prod
+    container_name: jarvis_frontend_prod
+    expose:
+      - "3000"
+    environment:
+      - REACT_APP_BRAIN_API=https://${CERTBOT_DOMAIN}/api
+      - REACT_APP_WEBSOCKET_URL=wss://${CERTBOT_DOMAIN}/ws
+      - REACT_APP_TTS_URL=https://${CERTBOT_DOMAIN}/tts
+      - REACT_APP_STT_URL=https://${CERTBOT_DOMAIN}/stt
+      - NODE_ENV=production
+    networks:
+      jarvis_backend:
+        ipv4_address: 172.23.0.70
+    depends_on:
+      - brain-api
+    restart: unless-stopped
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 📊 Monitoring - Prometheus (optionnel)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: jarvis_prometheus
+    expose:
+      - "9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /var/jarvis/data/prometheus:/prometheus:rw
+    networks:
+      jarvis_backend:
+        ipv4_address: 172.23.0.80
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    user: "65534:65534"
+    security_opt:
+      - no-new-privileges:true
+    profiles:
+      - monitoring
+
+  # 📈 Grafana (optionnel)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: jarvis_grafana
+    expose:
+      - "3001"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://${CERTBOT_DOMAIN}/grafana/
+    volumes:
+      - /var/jarvis/data/grafana:/var/lib/grafana:rw
+    networks:
+      jarvis_backend:
+        ipv4_address: 172.23.0.90
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    user: "472:472"
+    security_opt:
+      - no-new-privileges:true
+    profiles:
+      - monitoring

@@ -1,0 +1,158 @@
+# 🤖 JARVIS AI 2025 - Configuration Prometheus Production
+# Collecte de métriques de tous les services avec alerting
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'jarvis-ai'
+    environment: 'production'
+
+# Configuration Alertmanager
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      timeout: 10s
+      api_version: v2
+
+# Règles d'alerte
+rule_files:
+  - "rules/*.yml"
+
+scrape_configs:
+  # 🔍 Prometheus lui-même
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # 📊 Métriques système (Node Exporter)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'jarvis-host'
+
+  # 🐳 Métriques containers (cAdvisor)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # 🧠 Brain API - Service principal
+  - job_name: 'brain-api'
+    static_configs:
+      - targets: ['brain-api:5000']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    params:
+      format: ['prometheus']
+
+  # 🗣️ TTS Service - Text-to-Speech
+  - job_name: 'tts-service'
+    static_configs:
+      - targets: ['tts-service:5002']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # 🎤 STT Service - Speech-to-Text
+  - job_name: 'stt-service'
+    static_configs:
+      - targets: ['stt-service:5003']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # 🖥️ System Control Service
+  - job_name: 'system-control'
+    static_configs:
+      - targets: ['system-control:5004']
+    scrape_interval: 20s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # 💻 Terminal Service
+  - job_name: 'terminal-service'
+    static_configs:
+      - targets: ['terminal-service:5005']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # 🔧 MCP Gateway
+  - job_name: 'mcp-gateway'
+    static_configs:
+      - targets: ['mcp-gateway:5006']
+    scrape_interval: 20s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # 🧠 Autocomplete Service
+  - job_name: 'autocomplete-service'
+    static_configs:
+      - targets: ['autocomplete-service:5007']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # 🎮 GPU Stats Service
+  - job_name: 'gpu-stats-service'
+    static_configs:
+      - targets: ['gpu-stats-service:5009']
+    scrape_interval: 5s  # Plus fréquent pour les stats GPU
+    metrics_path: /metrics
+    scrape_timeout: 5s
+
+  # 🌐 Frontend (via nginx metrics si configuré)
+  - job_name: 'frontend'
+    static_configs:
+      - targets: ['frontend:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # ⚡ Redis Exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # 🗄️ PostgreSQL Exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # 🤖 Ollama LLM (si métriques exposées)
+  - job_name: 'ollama'
+    static_configs:
+      - targets: ['ollama:11434']
+    scrape_interval: 60s
+    metrics_path: /api/metrics
+    scrape_timeout: 30s
+    # Optionnel - Ollama peut ne pas exposer de métriques Prometheus nativement
+
+# Configuration de stockage
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 10GB
+    wal-compression: true
+
+# Configuration de sécurité
+web:
+  enable_lifecycle: true
+  enable_admin_api: true
+  max_connections: 512
+  read_timeout: 30s
