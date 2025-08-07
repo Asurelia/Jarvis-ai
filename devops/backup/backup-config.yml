@@ -1,0 +1,362 @@
+# JARVIS AI - Backup Configuration
+# Production backup strategy for GPT-OSS 20B migration
+
+global_settings:
+  encryption_enabled: true
+  compression_enabled: true
+  verification_enabled: true
+  concurrent_backups: 3
+  notification_webhooks:
+    success: "${BACKUP_SUCCESS_WEBHOOK}"
+    failure: "${BACKUP_FAILURE_WEBHOOK}"
+
+backups:
+  # PostgreSQL Database Backup
+  jarvis_postgres:
+    type: postgresql
+    priority: 1
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention_days: 30
+    encryption_enabled: true
+    compression_enabled: true
+    verification_enabled: true
+    source:
+      host: "${POSTGRES_HOST:-postgres-prod}"
+      port: 5432
+      database: "${POSTGRES_DB:-jarvis_memory}"
+      username: "${POSTGRES_USER:-jarvis}"
+      password: "${POSTGRES_PASSWORD}"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "database/postgresql"
+      region: "us-east-1"
+      storage_class: "STANDARD_IA"
+    post_backup_scripts:
+      - "pg_dumpall --globals-only > /tmp/postgres_globals.sql"
+      - "aws s3 cp /tmp/postgres_globals.sql s3://jarvis-backups-production/database/globals/"
+
+  # Redis Backup
+  jarvis_redis:
+    type: redis
+    priority: 2
+    schedule: "0 3 * * *"  # Daily at 3 AM
+    retention_days: 14
+    encryption_enabled: true
+    compression_enabled: true
+    verification_enabled: true
+    source:
+      host: "${REDIS_HOST:-redis-prod}"
+      port: 6379
+      password: "${REDIS_PASSWORD}"
+      database: 0
+      rdb_path: "/data/dump.rdb"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "database/redis"
+      region: "us-east-1"
+      storage_class: "STANDARD_IA"
+
+  # Application Configuration Backup
+  jarvis_config:
+    type: files
+    priority: 3
+    schedule: "0 1 * * *"  # Daily at 1 AM
+    retention_days: 60
+    encryption_enabled: true
+    compression_enabled: true
+    verification_enabled: true
+    source:
+      path: "/opt/jarvis/config"
+      exclude_patterns:
+        - "*.tmp"
+        - "*.log"
+        - ".git/*"
+        - "__pycache__/*"
+        - "*.pyc"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "config"
+      region: "us-east-1"
+      storage_class: "STANDARD"
+
+  # Docker Volumes Backup
+  jarvis_volumes:
+    type: files
+    priority: 4
+    schedule: "0 4 * * 0"  # Weekly on Sunday at 4 AM
+    retention_days: 90
+    encryption_enabled: true
+    compression_enabled: true
+    verification_enabled: true
+    source:
+      path: "/var/lib/docker/volumes"
+      exclude_patterns:
+        - "*.tmp"
+        - "lost+found"
+        - ".Trash-*"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "docker/volumes"
+      region: "us-east-1"
+      storage_class: "GLACIER"
+
+  # Ollama Models Backup
+  ollama_models:
+    type: files
+    priority: 5
+    schedule: "0 5 * * 0"  # Weekly on Sunday at 5 AM
+    retention_days: 180
+    encryption_enabled: true
+    compression_enabled: true
+    verification_enabled: true
+    source:
+      path: "/opt/jarvis/models/ollama"
+      exclude_patterns:
+        - "*.tmp"
+        - "*.lock"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "models/ollama"
+      region: "us-east-1"
+      storage_class: "GLACIER"
+
+  # Application Logs Backup
+  jarvis_logs:
+    type: files
+    priority: 6
+    schedule: "0 6 * * *"  # Daily at 6 AM
+    retention_days: 7
+    encryption_enabled: false
+    compression_enabled: true
+    verification_enabled: false
+    source:
+      path: "/opt/jarvis/logs"
+      exclude_patterns:
+        - "*.tmp"
+        - "debug.log"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "logs"
+      region: "us-east-1"
+      storage_class: "STANDARD_IA"
+
+  # Audio Cache Backup (Weekly)
+  jarvis_audio_cache:
+    type: files
+    priority: 7
+    schedule: "0 7 * * 0"  # Weekly on Sunday at 7 AM
+    retention_days: 30
+    encryption_enabled: false
+    compression_enabled: true
+    verification_enabled: false
+    source:
+      path: "/opt/jarvis/data/audio"
+      exclude_patterns:
+        - "*.tmp"
+        - "*.processing"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "data/audio"
+      region: "us-east-1"
+      storage_class: "STANDARD_IA"
+
+  # Memory Database Vector Store
+  jarvis_memory_vectors:
+    type: files
+    priority: 8
+    schedule: "30 2 * * *"  # Daily at 2:30 AM
+    retention_days: 45
+    encryption_enabled: true
+    compression_enabled: true
+    verification_enabled: true
+    source:
+      path: "/opt/jarvis/data/memory"
+      exclude_patterns:
+        - "*.tmp"
+        - "*.lock"
+        - "*.idx.tmp"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "data/memory"
+      region: "us-east-1"
+      storage_class: "STANDARD"
+
+  # TTS Models and Cache
+  tts_models:
+    type: files
+    priority: 9
+    schedule: "0 8 * * 0"  # Weekly on Sunday at 8 AM
+    retention_days: 90
+    encryption_enabled: false
+    compression_enabled: true
+    verification_enabled: true
+    source:
+      path: "/opt/jarvis/models/tts"
+      exclude_patterns:
+        - "*.tmp"
+        - "cache/*"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "models/tts"
+      region: "us-east-1"
+      storage_class: "STANDARD_IA"
+
+  # STT Models and Cache
+  stt_models:
+    type: files
+    priority: 10
+    schedule: "0 9 * * 0"  # Weekly on Sunday at 9 AM
+    retention_days: 90
+    encryption_enabled: false
+    compression_enabled: true
+    verification_enabled: true
+    source:
+      path: "/opt/jarvis/models/stt"
+      exclude_patterns:
+        - "*.tmp"
+        - "cache/*"
+    destination:
+      type: s3
+      bucket: "jarvis-backups-production"
+      prefix: "models/stt"
+      region: "us-east-1"
+      storage_class: "STANDARD_IA"
+
+# Disaster Recovery Configuration
+disaster_recovery:
+  enabled: true
+  rpo_minutes: 30  # Recovery Point Objective
+  rto_minutes: 120  # Recovery Time Objective
+  
+  # Critical backups for DR
+  critical_backups:
+    - jarvis_postgres
+    - jarvis_config
+    - jarvis_memory_vectors
+    - ollama_models
+  
+  # DR site configuration
+  dr_site:
+    region: "us-west-2"
+    bucket: "jarvis-dr-backups"
+    cross_region_replication: true
+    automated_restore: true
+    
+  # Failover automation
+  failover:
+    enabled: true
+    health_check_url: "https://jarvis.yourdomain.com/health"
+    check_interval_seconds: 30
+    failure_threshold: 5
+    recovery_threshold: 3
+    notification_channels:
+      - slack
+      - email
+      - pagerduty
+
+# Backup Testing and Validation
+testing:
+  enabled: true
+  schedule: "0 10 * * 0"  # Weekly on Sunday at 10 AM
+  
+  # Automated restore tests
+  restore_tests:
+    - backup_type: jarvis_postgres
+      test_environment: "staging"
+      validation_queries:
+        - "SELECT COUNT(*) FROM conversations;"
+        - "SELECT COUNT(*) FROM memory_entries;"
+    
+    - backup_type: jarvis_redis
+      test_environment: "staging"
+      validation_commands:
+        - "PING"
+        - "INFO keyspace"
+  
+  # Performance benchmarks
+  benchmarks:
+    backup_speed_mb_per_second: 100
+    restore_speed_mb_per_second: 150
+    compression_ratio_min: 0.3
+    encryption_overhead_max: 0.1
+
+# Monitoring and Alerting
+monitoring:
+  enabled: true
+  metrics_retention_days: 90
+  
+  # Backup success/failure tracking
+  alerts:
+    backup_failure:
+      severity: critical
+      channels: ["slack", "email", "pagerduty"]
+      
+    backup_duration_threshold:
+      threshold_minutes: 60
+      severity: warning
+      channels: ["slack"]
+      
+    storage_usage_threshold:
+      threshold_percentage: 85
+      severity: warning
+      channels: ["slack", "email"]
+      
+    verification_failure:
+      severity: critical
+      channels: ["slack", "email", "pagerduty"]
+
+# Retention Policies
+retention:
+  policies:
+    critical_data:
+      daily: 30
+      weekly: 12
+      monthly: 12
+      yearly: 7
+    
+    standard_data:
+      daily: 14
+      weekly: 8
+      monthly: 6
+      yearly: 3
+    
+    logs_data:
+      daily: 7
+      weekly: 4
+      monthly: 0
+      yearly: 0
+  
+  # Automated cleanup
+  cleanup:
+    enabled: true
+    schedule: "0 0 * * 0"  # Weekly on Sunday at midnight
+    dry_run: false
+    safety_margin_days: 1
+
+# Security Configuration
+security:
+  encryption:
+    algorithm: "AES-256-GCM"
+    key_rotation_days: 90
+    key_storage: "aws-kms"
+    kms_key_id: "${AWS_KMS_KEY_ID}"
+  
+  access_control:
+    backup_role: "jarvis-backup-service"
+    restore_role: "jarvis-restore-service"
+    s3_bucket_policy: "restrictive"
+    
+  audit:
+    enabled: true
+    log_all_operations: true
+    log_retention_days: 365
+    compliance_reports: true

@@ -20,7 +20,7 @@ class WebSocketConnection:
     user_id: Optional[str]
     connected_at: float
     last_activity: float
-    metadata: Dict[str, Any]
+    meta_data: Dict[str, Any]
 
 class WebSocketManager:
     """Gestionnaire des connexions WebSocket pour streaming audio et communication temps réel"""
@@ -71,7 +71,7 @@ class WebSocketManager:
                 user_id=None,
                 connected_at=asyncio.get_event_loop().time(),
                 last_activity=asyncio.get_event_loop().time(),
-                metadata={}
+                meta_data={}
             )
             
             self.connections[connection_id] = connection

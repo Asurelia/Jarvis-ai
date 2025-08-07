@@ -4,10 +4,37 @@ Configuration Prometheus et métriques applicatives
 """
 
 import logging
-from prometheus_client import Counter, Histogram, Gauge, Info
 import time
 
 logger = logging.getLogger(__name__)
+
+# Try to import Prometheus client, fallback to mock if not available
+try:
+    from prometheus_client import Counter, Histogram, Gauge, Info, make_asgi_app
+    PROMETHEUS_AVAILABLE = True
+    logger.info("📊 Prometheus client disponible")
+except ImportError:
+    logger.warning("⚠️ Prometheus client non disponible, utilisation du fallback")
+    PROMETHEUS_AVAILABLE = False
+    # Import fallback classes
+    from .monitoring_fallback import MockMetric as Counter
+    from .monitoring_fallback import MockMetric as Histogram  
+    from .monitoring_fallback import MockMetric as Gauge
+    from .monitoring_fallback import MockMetric as Info
+    
+    def make_asgi_app():
+        """Fallback ASGI app that returns 404"""
+        async def app(scope, receive, send):
+            await send({
+                'type': 'http.response.start',
+                'status': 404,
+                'headers': [[b'content-type', b'text/plain']],
+            })
+            await send({
+                'type': 'http.response.body',
+                'body': b'Prometheus metrics not available',
+            })
+        return app
 
 # Métriques Prometheus
 REQUESTS_TOTAL = Counter(

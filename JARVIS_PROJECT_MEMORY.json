@@ -1,0 +1,191 @@
+{
+  "project": {
+    "name": "JARVIS AI 2025",
+    "version": "3.0.0",
+    "type": "Multi-Modal AI Assistant",
+    "architecture": "Microservices + Docker",
+    "last_updated": "2025-08-03"
+  },
+  "structure": {
+    "core_services": {
+      "brain-api": {
+        "path": "services/brain-api/",
+        "entry": "main.py",
+        "port": 8080,
+        "description": "API principale M.A.MM - orchestration centrale",
+        "dependencies": ["ollama", "postgresql", "redis"],
+        "key_files": ["main.py", "core/agent.py", "core/memory.py", "core/metacognition.py"]
+      },
+      "tts-service": {
+        "path": "services/tts-service/",
+        "entry": "main.py", 
+        "port": 5002,
+        "description": "Synthèse vocale Coqui.ai streaming",
+        "key_files": ["main.py", "core/tts_engine.py", "presets/jarvis_voice.py"]
+      },
+      "stt-service": {
+        "path": "services/stt-service/",
+        "entry": "main.py",
+        "port": 5003,
+        "description": "Reconnaissance vocale Whisper temps réel",
+        "key_files": ["main.py"]
+      },
+      "system-control": {
+        "path": "services/system-control/",
+        "entry": "main.py",
+        "port": 5004,
+        "description": "Contrôle système sécurisé",
+        "security_note": "CRITICAL: Nécessite authentification JWT"
+      },
+      "mcp-gateway": {
+        "path": "services/mcp-gateway/",
+        "entry": "main.py",
+        "port": 5006,
+        "description": "Model Context Protocol pour IDE integration"
+      }
+    },
+    "core_modules": {
+      "ai": {
+        "path": "core/ai/",
+        "modules": ["memory_system.py", "ollama_service.py", "action_executor.py", "action_planner.py"],
+        "complexity": "HIGH - 790+ lines memory_system needs refactoring"
+      },
+      "voice": {
+        "path": "core/voice/",
+        "modules": ["voice_interface.py", "edge_tts.py", "whisper_stt.py"]
+      },
+      "vision": {
+        "path": "core/vision/",
+        "modules": ["screen_capture.py", "ocr_engine.py", "visual_analysis.py"]
+      },
+      "control": {
+        "path": "core/control/",
+        "modules": ["keyboard_controller.py", "mouse_controller.py", "app_detector.py"]
+      }
+    },
+    "frontend": {
+      "path": "ui/",
+      "framework": "React 18",
+      "port": 3000,
+      "key_components": [
+        "src/components/JarvisInterface.jsx",
+        "src/components/SituationRoom.jsx",
+        "src/components/VoiceWaveform.jsx",
+        "src/components/Sphere3D.js"
+      ],
+      "themes": ["Iron Man holographic", "8 dynamic 3D themes"],
+      "bundle_size": "2.8MB (target: <2MB)"
+    },
+    "database": {
+      "postgresql": {
+        "path": "services/memory-db/",
+        "port": 5432,
+        "features": ["pgvector", "SCRAM-SHA-256"],
+        "optimization_needed": "Index optimization for vector search"
+      },
+      "redis": {
+        "path": "services/redis/",
+        "port": 6379,
+        "usage": "Cache + Sessions + Pub/Sub",
+        "clustering_needed": true
+      }
+    },
+    "docker": {
+      "compose_files": [
+        "docker-compose.yml",
+        "docker-compose.ai-pod.yml",
+        "docker-compose.audio-pod.yml",
+        "docker-compose.control-pod.yml",
+        "docker-compose.integration-pod.yml",
+        "docker-compose.production.yml",
+        "docker-compose.monitoring.yml",
+        "docker-compose.database.yml",
+        "docker-compose.test.yml",
+        "docker-compose.amd.yml"
+      ],
+      "network": "172.20.0.0/16 (public) + 172.21.0.0/16 (secure)"
+    },
+    "tools": {
+      "path": "tools/",
+      "modules": ["ai_tools.py", "system_tools.py", "web_tools.py", "mcp_server.py"],
+      "note": "322 functions/classes - needs consistency refactoring"
+    },
+    "testing": {
+      "organized_tests": "tests/",
+      "categories": ["backend/", "frontend/", "integration/", "e2e/", "security/", "performance/"],
+      "orphaned_tests_at_root": [
+        "test_conversation.py",
+        "test_conversation_demo.py",
+        "test_gpu_integration.py",
+        "test_gpu_service_direct.py",
+        "test_gpu_simple.py",
+        "test_personas.py",
+        "test_simple_conversation.py"
+      ]
+    }
+  },
+  "security_issues": {
+    "critical": [
+      "system-control port 5004 exposed without auth",
+      "Docker SYS_PTRACE capability dangerous"
+    ],
+    "high": [
+      "JWT auth incomplete on endpoints",
+      "CORS too permissive in dev",
+      "Rate limiting insufficient"
+    ]
+  },
+  "performance_bottlenecks": {
+    "database": "Missing indexes on conversations and memories tables",
+    "api": "Brain API main.py 530 lines - too complex",
+    "frontend": "Bundle size 2.8MB needs optimization",
+    "cache": "Redis not clustered - single point of failure"
+  },
+  "cleanup_targets": {
+    "safe_to_delete": [
+      "__pycache__/ directories",
+      "*.pyc files",
+      "gpu_stats.log",
+      "dxdiag_output.txt", 
+      "test_screenshot.png",
+      "empty cache/ directories"
+    ],
+    "needs_review": [
+      "7 test_*.py files at root",
+      "REVIEW_COMPLETE_JARVIS_AI_2025.md (older duplicate)",
+      "demo_personas.py"
+    ]
+  },
+  "search_shortcuts": {
+    "main_entry": "start_jarvis.py",
+    "api_routes": "services/brain-api/api/routes/",
+    "ui_components": "ui/src/components/",
+    "docker_config": "docker-compose*.yml",
+    "core_ai": "core/ai/",
+    "tests": "tests/",
+    "monitoring": "monitoring/config/"
+  },
+  "integration_points": {
+    "ollama": "http://localhost:11434",
+    "openrouter_needed": true,
+    "mcp_gateway": "http://localhost:5006",
+    "websocket": "ws://localhost:8081"
+  },
+  "recommendations": {
+    "immediate": [
+      "Clean __pycache__ and logs",
+      "Fix system-control security",
+      "Implement JWT auth completely"
+    ],
+    "short_term": [
+      "Refactor brain-api/main.py",
+      "Add OpenRouter integration",
+      "Optimize database indexes"
+    ],
+    "long_term": [
+      "Migrate to Kubernetes",
+      "Implement service mesh",
+      "Add multi-tenant support"
+    ]
+  }
+}

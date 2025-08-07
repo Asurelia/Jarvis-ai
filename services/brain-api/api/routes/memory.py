@@ -20,7 +20,7 @@ class MemoryEntry(BaseModel):
     content: str
     memory_type: str  # static, dynamic, episodic
     user_id: str
-    metadata: Optional[Dict[str, Any]] = None
+    meta_data: Optional[Dict[str, Any]] = None
 
 class MemoryQuery(BaseModel):
     query: str

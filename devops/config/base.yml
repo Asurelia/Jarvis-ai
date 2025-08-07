@@ -1,0 +1,234 @@
+# JARVIS AI - Base Configuration
+# Common settings across all environments
+
+# Application Configuration
+app:
+  name: "JARVIS AI"
+  version: "3.0.0"
+  debug: false
+  log_level: "INFO"
+  timezone: "UTC"
+
+# Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  websocket_port: 8081
+  workers: 4
+  worker_connections: 2000
+  keepalive_timeout: 65
+  client_max_body_size: "50M"
+
+# Database Configuration
+database:
+  host: "postgres-prod"
+  port: 5432
+  name: "jarvis_memory"
+  username: "jarvis"
+  password:
+    value: ""
+    encrypted: true
+    description: "PostgreSQL password"
+  pool_size: 20
+  max_overflow: 30
+  pool_timeout: 30
+  pool_recycle: 3600
+  echo: false
+
+# Redis Configuration
+redis:
+  host: "redis-prod"
+  port: 6379
+  database: 0
+  password:
+    value: ""
+    encrypted: true
+    description: "Redis password"
+  pool_size: 50
+  socket_timeout: 5
+  socket_connect_timeout: 5
+  health_check_interval: 30
+
+# Ollama Configuration
+ollama:
+  url: "http://ollama-host:11434"
+  model: "jarvis-gpt-oss-20b"
+  timeout: 120
+  retry_count: 3
+  retry_delay: 1
+  health_check_interval: 30
+  max_context_length: 8192
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 40
+  repeat_penalty: 1.1
+
+# JWT Configuration
+jwt:
+  secret_key:
+    value: ""
+    encrypted: true
+    description: "JWT signing key"
+  algorithm: "HS256"
+  expire_minutes: 1440
+  refresh_expire_days: 7
+
+# API Configuration
+api:
+  secret_key:
+    value: ""
+    encrypted: true
+    description: "API secret key"
+  rate_limit_requests_per_minute: 1000
+  rate_limit_burst: 100
+  cors_origins:
+    - "http://localhost:3000"
+    - "https://jarvis.yourdomain.com"
+  cors_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  cors_headers:
+    - "Content-Type"
+    - "Authorization"
+    - "X-Requested-With"
+
+# TTS Configuration
+tts:
+  service_url: "http://tts-service:5002"
+  model: "tts_models/multilingual/multi-dataset/xtts_v2"
+  streaming_enabled: true
+  chunk_size: 2048
+  max_concurrent_requests: 10
+  cache_ttl: 3600
+  enable_gpu: true
+  voice_preset: "jarvis"
+
+# STT Configuration
+stt:
+  service_url: "http://stt-service:5003"
+  model: "openai/whisper-large-v3"
+  realtime_processing: true
+  vad_enabled: true
+  batch_size: 8
+  max_concurrent_requests: 5
+  enable_gpu: true
+  language: "auto"
+
+# Monitoring Configuration
+monitoring:
+  prometheus_enabled: true
+  prometheus_port: 9090
+  metrics_path: "/metrics"
+  health_check_path: "/health"
+  readiness_check_path: "/health/ready"
+  liveness_check_path: "/health/live"
+  tracing_enabled: true
+  jaeger_endpoint: "http://jaeger:14268/api/traces"
+  log_requests: true
+  log_responses: false
+
+# Security Configuration
+security:
+  enable_https: true
+  ssl_cert_path: "/etc/ssl/certs/jarvis.crt"
+  ssl_key_path: "/etc/ssl/private/jarvis.key"
+  hsts_max_age: 31536000
+  content_security_policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+  x_frame_options: "DENY"
+  x_content_type_options: "nosniff"
+  x_xss_protection: "1; mode=block"
+
+# Cache Configuration
+cache:
+  llm_cache_enabled: true
+  llm_cache_ttl: 3600
+  response_cache_enabled: true
+  response_cache_ttl: 300
+  memory_cache_size: 1000
+  disk_cache_size: "10GB"
+
+# Circuit Breaker Configuration
+circuit_breaker:
+  enabled: true
+  failure_threshold: 5
+  recovery_timeout: 30
+  expected_exception_types:
+    - "ConnectionError"
+    - "TimeoutError"
+    - "HTTPError"
+
+# Backup Configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention_days: 30
+  storage_path: "/backup/jarvis"
+  encrypt_backups: true
+  backup_types:
+    - "database"
+    - "redis"
+    - "configurations"
+    - "logs"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "json"
+  enable_access_logs: true
+  enable_error_logs: true
+  log_file: "/var/log/jarvis/app.log"
+  max_file_size: "100MB"
+  backup_count: 10
+  enable_syslog: false
+  syslog_address: "localhost:514"
+  
+  # Log levels by component
+  levels:
+    root: "INFO"
+    sqlalchemy: "WARNING"
+    uvicorn: "INFO"
+    fastapi: "INFO"
+    websockets: "INFO"
+
+# Performance Configuration
+performance:
+  enable_profiling: false
+  profiling_sample_rate: 0.1
+  async_pool_size: 100
+  max_concurrent_requests: 1000
+  request_timeout: 30
+  database_query_timeout: 10
+  cache_query_timeout: 5
+
+# Feature Flags (referenced in feature-flags.yml)
+features:
+  gpt_oss_20b_integration:
+    value: true
+    feature_flag: true
+    description: "Enable GPT-OSS 20B model integration"
+  
+  advanced_memory_system:
+    value: true
+    feature_flag: true
+    description: "Enable advanced memory and context management"
+  
+  real_time_audio_processing:
+    value: true
+    feature_flag: true
+    description: "Enable real-time audio processing"
+  
+  websocket_fallback:
+    value: true
+    feature_flag: true
+    description: "Enable WebSocket fallback mechanisms"
+
+# Resource Limits
+resources:
+  max_memory_usage: "4GB"
+  max_cpu_usage: 80
+  max_disk_usage: 90
+  max_connections: 1000
+  max_file_descriptors: 65536

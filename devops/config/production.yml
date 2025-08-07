@@ -1,0 +1,265 @@
+# JARVIS AI - Production Configuration
+# Production-specific overrides and settings
+
+# Application Configuration
+app:
+  debug: false
+  log_level: "WARNING"
+
+# Server Configuration
+server:
+  workers: 8
+  worker_connections: 4000
+  keepalive_timeout: 30
+
+# Database Configuration (Production-optimized)
+database:
+  host: "jarvis-db-cluster.production.internal"
+  pool_size: 40
+  max_overflow: 60
+  pool_timeout: 60
+  pool_recycle: 7200
+  echo: false
+  # Production-specific optimizations
+  statement_timeout: 30000
+  idle_in_transaction_session_timeout: 60000
+  
+# Redis Configuration (Production cluster)
+redis:
+  host: "jarvis-redis-cluster.production.internal"
+  pool_size: 100
+  socket_timeout: 2
+  socket_connect_timeout: 2
+  # Redis Sentinel for HA
+  sentinel_enabled: true
+  sentinel_hosts:
+    - "redis-sentinel-1:26379"
+    - "redis-sentinel-2:26379" 
+    - "redis-sentinel-3:26379"
+  sentinel_master_name: "jarvis-redis"
+
+# Ollama Configuration (External host)
+ollama:
+  url: "https://ollama.jarvis-ai.internal:11434"
+  timeout: 300
+  retry_count: 5
+  retry_delay: 2
+  health_check_interval: 60
+  # Production model settings
+  temperature: 0.5
+  max_context_length: 16384
+  batch_size: 8
+
+# API Configuration
+api:
+  rate_limit_requests_per_minute: 5000
+  rate_limit_burst: 500
+  cors_origins:
+    - "https://jarvis.yourdomain.com"
+    - "https://admin.jarvis.yourdomain.com"
+
+# TTS Configuration (Production)
+tts:
+  max_concurrent_requests: 50
+  cache_ttl: 7200
+  enable_gpu: true
+  # Production voice settings
+  quality: "high"
+  bitrate: 192
+
+# STT Configuration (Production)
+stt:
+  batch_size: 16
+  max_concurrent_requests: 25
+  enable_gpu: true
+  # Production recognition settings
+  model: "openai/whisper-large-v3-turbo"
+
+# Monitoring Configuration (Enhanced)
+monitoring:
+  prometheus_enabled: true
+  grafana_enabled: true
+  alertmanager_enabled: true
+  tracing_enabled: true
+  tracing_sample_rate: 0.1
+  log_requests: false
+  log_responses: false
+  # Production-specific metrics
+  custom_metrics_enabled: true
+  performance_monitoring: true
+  error_tracking: true
+  
+# Security Configuration (Hardened)
+security:
+  enable_https: true
+  force_https: true
+  ssl_protocols:
+    - "TLSv1.2"
+    - "TLSv1.3"
+  ssl_ciphers: "ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS"
+  hsts_max_age: 63072000  # 2 years
+  hsts_include_subdomains: true
+  hsts_preload: true
+  # Enhanced CSP for production
+  content_security_policy: |
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: https:;
+    connect-src 'self' wss: https:;
+    frame-ancestors 'none';
+    base-uri 'self';
+    form-action 'self'
+
+# Cache Configuration (Production-optimized)
+cache:
+  llm_cache_enabled: true
+  llm_cache_ttl: 7200
+  response_cache_enabled: true
+  response_cache_ttl: 600
+  memory_cache_size: 10000
+  disk_cache_size: "100GB"
+  cache_compression: true
+  cache_encryption: true
+
+# Circuit Breaker Configuration (Production)
+circuit_breaker:
+  enabled: true
+  failure_threshold: 10
+  recovery_timeout: 60
+  slow_call_duration_threshold: 10
+  slow_call_rate_threshold: 50
+  minimum_number_of_calls: 20
+
+# Backup Configuration (Production)
+backup:
+  enabled: true
+  schedule: "0 1 * * *"  # Daily at 1 AM
+  retention_days: 90
+  storage_path: "s3://jarvis-backups-prod"
+  encrypt_backups: true
+  compression_enabled: true
+  incremental_backups: true
+  backup_verification: true
+  offsite_replication: true
+  
+# Logging Configuration (Production)
+logging:
+  level: "WARNING"
+  format: "json"
+  enable_access_logs: false
+  enable_error_logs: true
+  log_file: "/var/log/jarvis/app.log"
+  max_file_size: "500MB"
+  backup_count: 20
+  enable_syslog: true
+  syslog_address: "syslog.production.internal:514"
+  # Centralized logging
+  elasticsearch_enabled: true
+  elasticsearch_host: "elasticsearch.production.internal:9200"
+  log_retention_days: 30
+
+# Performance Configuration (Production-optimized)
+performance:
+  enable_profiling: false
+  async_pool_size: 500
+  max_concurrent_requests: 5000
+  request_timeout: 60
+  database_query_timeout: 30
+  cache_query_timeout: 10
+  # Production optimizations
+  enable_compression: true
+  compression_level: 6
+  enable_keep_alive: true
+  tcp_nodelay: true
+
+# Auto-scaling Configuration
+autoscaling:
+  enabled: true
+  min_instances: 3
+  max_instances: 20
+  target_cpu_utilization: 70
+  target_memory_utilization: 80
+  scale_up_cooldown: 300
+  scale_down_cooldown: 600
+
+# Health Check Configuration
+health_checks:
+  startup_timeout: 300
+  readiness_timeout: 30
+  liveness_timeout: 10
+  readiness_period: 10
+  liveness_period: 30
+  failure_threshold: 3
+  success_threshold: 1
+
+# Network Configuration
+network:
+  allowed_ips:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  denied_ips: []
+  rate_limiting_by_ip: true
+  ddos_protection: true
+  
+# Alert Configuration
+alerts:
+  enabled: true
+  webhook_url:
+    value: ""
+    encrypted: true
+    description: "Slack/Teams webhook for alerts"
+  email_notifications: true
+  sms_notifications: true
+  pagerduty_integration: true
+  
+  # Alert thresholds
+  cpu_threshold: 85
+  memory_threshold: 90
+  disk_threshold: 85
+  error_rate_threshold: 5.0
+  response_time_threshold: 2000
+  
+# Disaster Recovery
+disaster_recovery:
+  enabled: true
+  rpo_minutes: 15  # Recovery Point Objective
+  rto_minutes: 60  # Recovery Time Objective
+  backup_regions:
+    - "us-west-2"
+    - "eu-central-1"
+  automated_failover: true
+  failover_health_check_interval: 30
+
+# Compliance
+compliance:
+  gdpr_enabled: true
+  hipaa_enabled: false
+  pci_dss_enabled: false
+  audit_logging: true
+  data_encryption_at_rest: true
+  data_encryption_in_transit: true
+  access_logging: true
+  retention_policy_days: 2555  # 7 years
+
+# External Integrations
+integrations:
+  datadog_enabled: true
+  datadog_api_key:
+    value: ""
+    encrypted: true
+    description: "Datadog API key"
+  
+  newrelic_enabled: false
+  newrelic_license_key:
+    value: ""
+    encrypted: true
+    description: "New Relic license key"
+  
+  sentry_enabled: true
+  sentry_dsn:
+    value: ""
+    encrypted: true
+    description: "Sentry DSN for error tracking"

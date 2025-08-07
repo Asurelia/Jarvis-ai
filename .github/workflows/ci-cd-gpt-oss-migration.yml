@@ -1,0 +1,534 @@
+name: JARVIS AI - GPT-OSS 20B Migration CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, feature/gpt-oss-migration ]
+    paths:
+      - 'services/**'
+      - 'devops/**'
+      - 'ui/**'
+      - 'docker-compose*.yml'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'services/**'
+      - 'devops/**'
+      - 'ui/**'
+  workflow_dispatch:
+    inputs:
+      deployment_environment:
+        description: 'Deployment Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      deployment_strategy:
+        description: 'Deployment Strategy'
+        required: true
+        default: 'blue-green'
+        type: choice
+        options:
+          - blue-green
+          - rolling
+          - canary
+      force_deployment:
+        description: 'Force deployment (skip some checks)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  JARVIS_VERSION: ${{ github.sha }}
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 🔍 Code Quality & Security Checks
+  quality-checks:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install security tools
+        run: |
+          pip install bandit safety semgrep
+          npm install -g snyk
+
+      - name: Run security scans
+        run: |
+          # Python security scan
+          bandit -r services/ -f json -o bandit-report.json || true
+          safety check --json --output safety-report.json || true
+          
+          # Semgrep security scan
+          semgrep --config=auto --json --output=semgrep-report.json services/ || true
+          
+          # Docker security scan
+          docker run --rm -v "$PWD":/project openpolicyagent/conftest verify --policy devops/policies/ docker-compose*.yml
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            *-report.json
+          retention-days: 30
+
+  # 🧪 Unit & Integration Tests
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_USER: test
+          POSTGRES_DB: jarvis_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r tests/requirements-test.txt
+
+      - name: Set up test environment
+        run: |
+          export POSTGRES_URL="postgresql://test:test@localhost:5432/jarvis_test"
+          export REDIS_URL="redis://localhost:6379/0"
+          export JWT_SECRET_KEY="test-secret-key"
+          python -m pytest tests/backend/ -v --cov=services/ --cov-report=xml --cov-report=html
+
+      - name: Run integration tests
+        run: |
+          python -m pytest tests/integration/ -v --maxfail=5
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-backend
+          path: |
+            htmlcov/
+            coverage.xml
+          retention-days: 30
+
+  # 🎨 Frontend Tests
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./ui
+        run: npm ci
+
+      - name: Run linting
+        working-directory: ./ui
+        run: npm run lint
+
+      - name: Run unit tests
+        working-directory: ./ui
+        run: npm test -- --coverage --watchAll=false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-frontend
+          path: |
+            ui/coverage/
+          retention-days: 30
+
+  # 📊 Performance Benchmarks
+  performance-benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [quality-checks]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run benchmarks
+        run: |
+          pip install -r tests/performance/requirements.txt
+          python tests/performance/benchmark_gpt_oss_20b_migration.py --output benchmark-results.json
+
+      - name: Compare with baseline
+        run: |
+          if [[ -f "benchmarks/baseline.json" ]]; then
+            python scripts/compare-benchmarks.py baseline.json benchmark-results.json
+          fi
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: benchmark-results.json
+          retention-days: 30
+
+  # 🐳 Build Docker Images
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test-backend, test-frontend]
+    strategy:
+      matrix:
+        service: [brain-api, tts-service, stt-service]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/${{ matrix.service }}
+          file: ./services/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ env.JARVIS_VERSION }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-${{ matrix.service }}.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-${{ matrix.service }}.sarif'
+
+  # 🚀 Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-images, performance-benchmarks]
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && inputs.deployment_environment == 'staging')
+    environment:
+      name: staging
+      url: https://jarvis-staging.yourdomain.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure staging environment
+        run: |
+          echo "DEPLOYMENT_ENV=staging" >> $GITHUB_ENV
+          echo "JARVIS_VERSION=${{ github.sha }}" >> $GITHUB_ENV
+          echo "DEPLOYMENT_STRATEGY=${{ inputs.deployment_strategy || 'rolling' }}" >> $GITHUB_ENV
+
+      - name: Set up staging secrets
+        run: |
+          echo "${{ secrets.STAGING_ENV_FILE }}" > .env.staging
+
+      - name: Deploy to staging
+        run: |
+          chmod +x devops/infrastructure/automation/deploy-hybrid-stack.sh
+          ./devops/infrastructure/automation/deploy-hybrid-stack.sh deploy
+
+      - name: Run staging smoke tests
+        run: |
+          chmod +x tests/scripts/run-smoke-tests.sh
+          ./tests/scripts/run-smoke-tests.sh staging
+
+      - name: Update deployment status
+        if: always()
+        run: |
+          if [[ "${{ job.status }}" == "success" ]]; then
+            curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+              -H 'Content-type: application/json' \
+              -d '{"text":"✅ JARVIS AI deployed to staging successfully! Version: ${{ github.sha }}"}'
+          else
+            curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+              -H 'Content-type: application/json' \
+              -d '{"text":"❌ JARVIS AI staging deployment failed! Version: ${{ github.sha }}"}'
+          fi
+
+  # 🏭 Deploy to Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [deploy-staging]
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.deployment_environment == 'production')
+    environment:
+      name: production
+      url: https://jarvis.yourdomain.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure production environment
+        run: |
+          echo "DEPLOYMENT_ENV=production" >> $GITHUB_ENV
+          echo "JARVIS_VERSION=${{ github.sha }}" >> $GITHUB_ENV
+          echo "DEPLOYMENT_STRATEGY=${{ inputs.deployment_strategy || 'blue-green' }}" >> $GITHUB_ENV
+
+      - name: Set up production secrets
+        run: |
+          echo "${{ secrets.PRODUCTION_ENV_FILE }}" > .env.production
+
+      - name: Backup current production
+        run: |
+          chmod +x devops/infrastructure/automation/backup-production.sh
+          ./devops/infrastructure/automation/backup-production.sh
+
+      - name: Deploy to production
+        run: |
+          chmod +x devops/infrastructure/automation/deploy-hybrid-stack.sh
+          ./devops/infrastructure/automation/deploy-hybrid-stack.sh deploy
+
+      - name: Run production health checks
+        run: |
+          chmod +x tests/scripts/run-health-checks.sh
+          ./tests/scripts/run-health-checks.sh production
+
+      - name: Run production integration tests
+        run: |
+          chmod +x tests/scripts/run-integration-tests.sh
+          ./tests/scripts/run-integration-tests.sh production
+
+      - name: Monitor deployment metrics
+        run: |
+          python devops/monitoring/deployment-monitor.py \
+            --environment production \
+            --version ${{ github.sha }} \
+            --duration 300
+
+      - name: Update deployment status
+        if: always()
+        run: |
+          if [[ "${{ job.status }}" == "success" ]]; then
+            curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+              -H 'Content-type: application/json' \
+              -d '{"text":"🚀 JARVIS AI deployed to production successfully! Version: ${{ github.sha }}\nStrategy: ${{ env.DEPLOYMENT_STRATEGY }}"}'
+          else
+            curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+              -H 'Content-type: application/json' \
+              -d '{"text":"🚨 JARVIS AI production deployment failed! Rolling back... Version: ${{ github.sha }}"}'
+            
+            # Auto-rollback on failure
+            ./devops/infrastructure/automation/deploy-hybrid-stack.sh rollback
+          fi
+
+  # 🔄 Canary Deployment
+  deploy-canary:
+    name: Canary Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [build-images]
+    if: github.event_name == 'workflow_dispatch' && inputs.deployment_strategy == 'canary'
+    environment:
+      name: production-canary
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy canary (5% traffic)
+        run: |
+          chmod +x devops/infrastructure/automation/deploy-canary.sh
+          ./devops/infrastructure/automation/deploy-canary.sh --traffic-percentage 5
+
+      - name: Monitor canary metrics (10 minutes)
+        run: |
+          python devops/monitoring/canary-monitor.py \
+            --duration 600 \
+            --error-threshold 1.0 \
+            --latency-threshold 500
+
+      - name: Increase canary traffic (25%)
+        run: |
+          ./devops/infrastructure/automation/deploy-canary.sh --traffic-percentage 25
+
+      - name: Monitor extended metrics (15 minutes)
+        run: |
+          python devops/monitoring/canary-monitor.py \
+            --duration 900 \
+            --error-threshold 0.5 \
+            --latency-threshold 300
+
+      - name: Complete canary rollout (100%)
+        run: |
+          ./devops/infrastructure/automation/deploy-canary.sh --traffic-percentage 100
+
+      - name: Cleanup old version
+        run: |
+          ./devops/infrastructure/automation/cleanup-old-deployment.sh
+
+  # 📊 Post-Deployment Monitoring
+  post-deployment-monitoring:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [deploy-production]
+    if: always() && (needs.deploy-production.result == 'success')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up monitoring
+        run: |
+          pip install -r devops/monitoring/requirements.txt
+
+      - name: Monitor deployment for 30 minutes
+        run: |
+          python devops/monitoring/post-deployment-monitor.py \
+            --environment production \
+            --version ${{ github.sha }} \
+            --duration 1800 \
+            --alert-on-anomaly
+
+      - name: Generate deployment report
+        run: |
+          python devops/monitoring/generate-deployment-report.py \
+            --environment production \
+            --version ${{ github.sha }} \
+            --output deployment-report.html
+
+      - name: Upload deployment report
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-report
+          path: deployment-report.html
+          retention-days: 90
+
+  # 🔄 Automated Rollback
+  automated-rollback:
+    name: Automated Rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [deploy-production, post-deployment-monitoring]
+    if: failure() && (needs.deploy-production.result == 'success')
+    environment:
+      name: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Execute rollback
+        run: |
+          chmod +x devops/infrastructure/automation/deploy-hybrid-stack.sh
+          ./devops/infrastructure/automation/deploy-hybrid-stack.sh rollback
+
+      - name: Verify rollback success
+        run: |
+          chmod +x tests/scripts/run-health-checks.sh
+          ./tests/scripts/run-health-checks.sh production
+
+      - name: Notify rollback completion
+        run: |
+          curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            -d '{"text":"🔄 JARVIS AI production rollback completed successfully. System restored to previous stable version."}'

@@ -18,5 +18,4 @@ python-dotenv==1.0.0
 loguru==0.7.2
 
 # Async and threading
-asyncio-subprocess==0.1.0
 aiofiles==23.2.1

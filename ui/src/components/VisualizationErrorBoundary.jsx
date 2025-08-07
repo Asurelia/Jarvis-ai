@@ -244,9 +244,9 @@ class VisualizationErrorBoundary extends ErrorBoundary {
         fallbackMode: this.state.fallbackMode,
         userAgent: navigator.userAgent,
         screen: {
-          width: screen.width,
-          height: screen.height,
-          colorDepth: screen.colorDepth,
+          width: window.screen.width,
+          height: window.screen.height,
+          colorDepth: window.screen.colorDepth,
           pixelRatio: window.devicePixelRatio
         }
       }

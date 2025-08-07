@@ -20,7 +20,30 @@ class Settings(BaseSettings):
     # 🔗 URLs des services externes
     REDIS_URL: str = "redis://redis:6379"
     MEMORY_DB_URL: str = "postgresql://jarvis:jarvis123@memory-db:5432/jarvis_memory"
-    OLLAMA_URL: str = "http://ollama:11434"
+    
+    # 🤖 LLM Configuration - Hybrid Mode Support
+    OLLAMA_MODE: str = "single"  # single, hybrid, gateway_only
+    OLLAMA_URL: str = "http://ollama:11434"  # Legacy single mode
+    
+    # Hybrid mode configuration
+    OLLAMA_PRIMARY_URL: str = "http://host.docker.internal:11434"    # Host Ollama
+    OLLAMA_FALLBACK_URL: str = "http://ollama-fallback:11434"        # Container Ollama
+    OLLAMA_CLOUD_URL: str = ""                                       # Future OpenRouter
+    
+    # LLM Gateway Service
+    LLM_GATEWAY_URL: str = "http://llm-gateway:5010"
+    LLM_ROUTING_ENABLED: bool = True
+    
+    # Model configuration
+    PRIMARY_MODEL: str = "llama3.2:3b"
+    LARGE_MODEL: str = "gpt-oss-20b" 
+    FALLBACK_MODEL: str = "llama3.2:3b"
+    MODEL_SELECTION_STRATEGY: str = "complexity_based"
+    
+    # Timeouts and failover
+    HOST_NETWORK_TIMEOUT: int = 30
+    LLM_FAILOVER_TIMEOUT: int = 10
+    
     TTS_SERVICE_URL: str = "http://tts-service:5002"
     STT_SERVICE_URL: str = "http://stt-service:5003"
     

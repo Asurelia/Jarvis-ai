@@ -1,0 +1,124 @@
+{
+  "gpu_optimization": {
+    "platform": "AMD RX 7800 XT",
+    "vram_total_mb": 16384,
+    "compute_units": 60,
+    "memory_bandwidth_gbps": 624,
+    "architecture": "RDNA3"
+  },
+  
+  "models": {
+    "llama3.2:3b": {
+      "quantization": "Q4_K_M",
+      "vram_usage_mb": 2800,
+      "context_length": 8192,
+      "batch_size": 512,
+      "num_threads": 8,
+      "gpu_layers": -1,
+      "mmap": true,
+      "mlock": true,
+      "numa": false,
+      "low_vram": false,
+      "f16_kv": true,
+      "logits_all": false,
+      "vocab_only": false,
+      "use_mlock": true,
+      "embedding": false,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 40,
+      "typical_p": 1.0,
+      "repeat_penalty": 1.1,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "mirostat": 0,
+      "mirostat_lr": 0.1,
+      "mirostat_ent": 5.0,
+      "penalize_nl": true,
+      "seed": -1,
+      "tfs_z": 1.0,
+      "n_predict": 2048,
+      "rope_frequency_base": 10000.0,
+      "rope_frequency_scale": 1.0
+    },
+    
+    "gpt-oss-20b": {
+      "quantization": "Q4_K_M",
+      "vram_usage_mb": 12288,
+      "context_length": 16384,
+      "batch_size": 256,
+      "num_threads": 16,
+      "gpu_layers": -1,
+      "mmap": true,
+      "mlock": true,
+      "numa": false,
+      "low_vram": false,
+      "f16_kv": true,
+      "logits_all": false,
+      "vocab_only": false,
+      "use_mlock": true,
+      "embedding": false,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 40,
+      "typical_p": 1.0,
+      "repeat_penalty": 1.1,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "mirostat": 0,
+      "mirostat_lr": 0.1,
+      "mirostat_ent": 5.0,
+      "penalize_nl": true,
+      "seed": -1,
+      "tfs_z": 1.0,
+      "n_predict": 4096,
+      "rope_frequency_base": 10000.0,
+      "rope_frequency_scale": 1.0,
+      "flash_attention": true,
+      "group_attention": true
+    }
+  },
+  
+  "rocm_settings": {
+    "hip_visible_devices": "0",
+    "rocr_visible_devices": "0",
+    "hip_force_dev_kernarg": "1",
+    "amd_log_level": "2",
+    "hip_launch_blocking": "0",
+    "rocm_version": "5.7.0",
+    "hsa_enable_interrupt": "0",
+    "hip_device_order": "PCI_BUS_ID"
+  },
+  
+  "memory_management": {
+    "vram_threshold_warning": 0.85,
+    "vram_threshold_critical": 0.95,
+    "temperature_threshold_warning": 80,
+    "temperature_threshold_critical": 85,
+    "memory_pool_size_mb": 1024,
+    "garbage_collection_interval": 30,
+    "preallocation_enabled": true,
+    "memory_defragmentation": true
+  },
+  
+  "performance_tuning": {
+    "concurrent_requests_max": 4,
+    "queue_size_max": 32,
+    "request_timeout_seconds": 120,
+    "model_loading_timeout_seconds": 300,
+    "warmup_requests": 2,
+    "cache_enabled": true,
+    "cache_size_mb": 2048,
+    "prefetch_enabled": true,
+    "async_processing": true
+  },
+  
+  "thermal_management": {
+    "fan_curve_enabled": true,
+    "temperature_monitoring_interval": 5,
+    "throttle_temperature": 83,
+    "emergency_shutdown_temperature": 90,
+    "cool_down_delay_seconds": 10,
+    "adaptive_performance": true
+  }
+}

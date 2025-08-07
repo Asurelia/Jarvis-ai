@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 class TestBrainAPIPerformance:
     """Tests de performance pour Brain API"""
     
-    BASE_URL = "http://localhost:5000"
+    BASE_URL = "http://localhost:8080"
     
     @pytest.fixture
     def performance_thresholds(self) -> Dict[str, float]:

@@ -36,7 +36,7 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p /app/logs /app/cache
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
+COPY requirements_simple.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
@@ -61,4 +61,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5004/health || exit 1
 
 # Start command
-CMD ["python", "main.py"]
+CMD ["python", "main_simple.py"]

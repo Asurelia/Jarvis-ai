@@ -192,3 +192,23 @@ security_events.log
 # Let's Encrypt certificates
 certbot/
 letsencrypt/
+
+
+# Python
+*.pyc
+
+# Test artifacts
+test_screenshot.png
+dxdiag_output.txt
+
+# Virtual Environment
+*.sqlite3
+*.temp
+*.old
+
+# Ollama data
+data/ollama/
+nul
+
+# Redis data persistence
+data/redis/

@@ -1,0 +1,370 @@
+# JARVIS AI - Prometheus Alert Rules
+# Production-ready alerting for GPT-OSS 20B migration
+
+groups:
+  # System-level alerts
+  - name: jarvis.system
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+          environment: production
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://runbooks.jarvis.ai/system/high-cpu"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+          environment: production
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://runbooks.jarvis.ai/system/high-memory"
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_free_bytes{fstype!="tmpfs",fstype!="overlay"} / node_filesystem_size_bytes{fstype!="tmpfs",fstype!="overlay"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+          environment: production
+        annotations:
+          summary: "Disk space is running low"
+          description: "Disk usage is above 85% on {{ $labels.instance }} mount {{ $labels.mountpoint }}"
+          runbook_url: "https://runbooks.jarvis.ai/system/disk-space"
+
+      - alert: SystemLoad
+        expr: node_load15 / count(count(node_cpu_seconds_total) by (cpu)) by (instance) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+          environment: production
+        annotations:
+          summary: "High system load"
+          description: "System load is {{ $value }} on {{ $labels.instance }}"
+
+  # Application-level alerts
+  - name: jarvis.application
+    rules:
+      - alert: BrainAPIDown
+        expr: up{job="brain-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: brain-api
+          environment: production
+        annotations:
+          summary: "Brain API service is down"
+          description: "Brain API has been down for more than 1 minute"
+          runbook_url: "https://runbooks.jarvis.ai/services/brain-api-down"
+
+      - alert: BrainAPIHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="brain-api"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: brain-api
+          environment: production
+        annotations:
+          summary: "Brain API high latency"
+          description: "95th percentile latency is {{ $value }}s for Brain API"
+          runbook_url: "https://runbooks.jarvis.ai/services/brain-api-latency"
+
+      - alert: BrainAPIErrorRate
+        expr: rate(http_requests_total{job="brain-api",status=~"5.."}[5m]) / rate(http_requests_total{job="brain-api"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: brain-api
+          environment: production
+        annotations:
+          summary: "Brain API high error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} for Brain API"
+          runbook_url: "https://runbooks.jarvis.ai/services/brain-api-errors"
+
+      - alert: TTSServiceDown
+        expr: up{job="tts-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: tts-service
+          environment: production
+        annotations:
+          summary: "TTS service is down"
+          description: "TTS service has been down for more than 2 minutes"
+
+      - alert: STTServiceDown
+        expr: up{job="stt-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: stt-service
+          environment: production
+        annotations:
+          summary: "STT service is down"
+          description: "STT service has been down for more than 2 minutes"
+
+  # Ollama-specific alerts
+  - name: jarvis.ollama
+    rules:
+      - alert: OllamaHostDown
+        expr: up{job="ollama"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: ollama
+          environment: production
+        annotations:
+          summary: "Ollama host is down"
+          description: "Ollama host has been unreachable for more than 1 minute"
+          runbook_url: "https://runbooks.jarvis.ai/services/ollama-down"
+
+      - alert: OllamaHighMemoryUsage
+        expr: ollama_memory_used_bytes / ollama_memory_total_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: ollama
+          environment: production
+        annotations:
+          summary: "Ollama high memory usage"
+          description: "Ollama memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      - alert: OllamaModelLoadTime
+        expr: ollama_model_load_duration_seconds > 30
+        for: 1m
+        labels:
+          severity: warning
+          service: ollama
+          environment: production
+        annotations:
+          summary: "Ollama model loading slowly"
+          description: "Model loading time is {{ $value }}s for {{ $labels.model }}"
+
+      - alert: OllamaRequestQueueSize
+        expr: ollama_request_queue_size > 50
+        for: 2m
+        labels:
+          severity: warning
+          service: ollama
+          environment: production
+        annotations:
+          summary: "Ollama request queue is backing up"
+          description: "Request queue size is {{ $value }} on {{ $labels.instance }}"
+
+  # Database alerts
+  - name: jarvis.database
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgresql
+          environment: production
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 1 minute"
+          runbook_url: "https://runbooks.jarvis.ai/database/postgres-down"
+
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_activity_count / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+          environment: production
+        annotations:
+          summary: "PostgreSQL too many connections"
+          description: "PostgreSQL has {{ $value | humanizePercentage }} connections used"
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_activity_max_tx_duration[5m]) > 60
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+          environment: production
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Slow queries detected with duration > 60s"
+
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+          environment: production
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute"
+          runbook_url: "https://runbooks.jarvis.ai/database/redis-down"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          service: redis
+          environment: production
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+
+  # GPU alerts
+  - name: jarvis.gpu
+    rules:
+      - alert: GPUHighUtilization
+        expr: gpu_utilization_percent > 95
+        for: 10m
+        labels:
+          severity: warning
+          service: gpu
+          environment: production
+        annotations:
+          summary: "GPU high utilization"
+          description: "GPU utilization is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: GPUHighTemperature
+        expr: gpu_temperature_celsius > 85
+        for: 5m
+        labels:
+          severity: critical
+          service: gpu
+          environment: production
+        annotations:
+          summary: "GPU high temperature"
+          description: "GPU temperature is {{ $value }}°C on {{ $labels.instance }}"
+
+      - alert: GPUMemoryHigh
+        expr: gpu_memory_used_bytes / gpu_memory_total_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: gpu
+          environment: production
+        annotations:
+          summary: "GPU memory usage high"
+          description: "GPU memory usage is {{ $value | humanizePercentage }}"
+
+  # Network alerts
+  - name: jarvis.network
+    rules:
+      - alert: HighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total[5m]) / 1024 / 1024 > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: network
+          environment: production
+        annotations:
+          summary: "High network receive traffic"
+          description: "Network receive traffic is {{ $value }}MB/s on {{ $labels.instance }}"
+
+      - alert: WebsiteDown
+        expr: probe_success{job="blackbox"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: website
+          environment: production
+        annotations:
+          summary: "Website is down"
+          description: "Website {{ $labels.instance }} has been down for more than 2 minutes"
+          runbook_url: "https://runbooks.jarvis.ai/services/website-down"
+
+  # Business logic alerts
+  - name: jarvis.business
+    rules:
+      - alert: ConversationFailureRate
+        expr: rate(jarvis_conversations_failed_total[5m]) / rate(jarvis_conversations_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: conversation
+          environment: production
+        annotations:
+          summary: "High conversation failure rate"
+          description: "Conversation failure rate is {{ $value | humanizePercentage }}"
+
+      - alert: ModelResponseTime
+        expr: histogram_quantile(0.95, rate(jarvis_model_response_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: model
+          environment: production
+        annotations:
+          summary: "Model response time high"
+          description: "95th percentile model response time is {{ $value }}s"
+
+      - alert: AudioProcessingBacklog
+        expr: jarvis_audio_queue_size > 100
+        for: 2m
+        labels:
+          severity: warning
+          service: audio
+          environment: production
+        annotations:
+          summary: "Audio processing backlog"
+          description: "Audio processing queue size is {{ $value }}"
+
+  # Security alerts
+  - name: jarvis.security
+    rules:
+      - alert: HighFailedLogins
+        expr: rate(jarvis_failed_login_attempts_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+          service: security
+          environment: production
+        annotations:
+          summary: "High failed login attempts"
+          description: "Failed login attempts rate is {{ $value }} per second"
+
+      - alert: UnauthorizedAPIAccess
+        expr: rate(http_requests_total{status="401"}[5m]) > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: security
+          environment: production
+        annotations:
+          summary: "High unauthorized API access attempts"
+          description: "Unauthorized API access rate is {{ $value }} per second"
+
+  # Deployment alerts
+  - name: jarvis.deployment
+    rules:
+      - alert: DeploymentFailed
+        expr: kube_deployment_status_replicas_unavailable{deployment=~"jarvis.*"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: deployment
+          environment: production
+        annotations:
+          summary: "Deployment has failed"
+          description: "Deployment {{ $labels.deployment }} has {{ $value }} unavailable replicas"
+
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: deployment
+          environment: production
+        annotations:
+          summary: "Pod is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crash looping"

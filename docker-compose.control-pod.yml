@@ -4,6 +4,7 @@
 networks:
   control_network:
     driver: bridge
+    internal: true
     ipam:
       config:
         - subnet: 172.23.0.0/16
@@ -19,13 +20,16 @@ services:
       context: ./services/system-control
       dockerfile: Dockerfile
     container_name: control_pod_system
-    ports:
-      - "5004:5004"
+    expose:
+      - "5004"
     environment:
       - SANDBOX_MODE=true
       - MAX_ACTIONS_PER_MINUTE=60
       - DISPLAY=:99
       - VOICE_BRIDGE_URL=http://host.docker.internal:3001
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REQUIRED=true
+      - ALLOWED_INTERNAL_IPS=172.23.0.0/16
     volumes:
       - ./logs:/app/logs
       - control_cache:/app/cache
@@ -38,10 +42,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    # Privilèges pour contrôle système
+    # Security hardening - removed dangerous privileges
     privileged: false
-    cap_add:
-      - SYS_PTRACE
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
     # Communication avec host
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -52,12 +57,15 @@ services:
       context: ./services/terminal-service
       dockerfile: Dockerfile
     container_name: control_pod_terminal
-    ports:
-      - "5005:5005"
+    expose:
+      - "5005"
     environment:
       - MAX_TERMINAL_SESSIONS=10
       - SESSION_TIMEOUT_MINUTES=30
       - AI_POD_URL=http://host.docker.internal:8080
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REQUIRED=true
+      - ALLOWED_INTERNAL_IPS=172.23.0.0/16
     volumes:
       - ./logs:/app/logs
       - terminal_sessions:/app/sessions
@@ -65,6 +73,9 @@ services:
       control_network:
         ipv4_address: 172.23.0.20
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5005/health"]
       interval: 30s
@@ -80,13 +91,16 @@ services:
       context: ./services/action-executor
       dockerfile: Dockerfile
     container_name: control_pod_executor
-    ports:
-      - "5021:5021"
+    expose:
+      - "5021"
     environment:
       - SYSTEM_CONTROL_URL=http://system-control:5004
       - TERMINAL_SERVICE_URL=http://terminal-service:5005
       - AI_POD_URL=http://host.docker.internal:8080
       - VOICE_BRIDGE_URL=http://host.docker.internal:3001
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REQUIRED=true
+      - ALLOWED_INTERNAL_IPS=172.23.0.0/16
     networks:
       control_network:
         ipv4_address: 172.23.0.30
@@ -94,6 +108,9 @@ services:
       - system-control
       - terminal-service
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5021/health"]
       interval: 30s

@@ -1,0 +1,325 @@
+# 🤖 JARVIS v3.0 - Hybrid Ollama Architecture (Docker + Host)
+# Migration configuration for Host Ollama integration with GPT-OSS 20B
+
+networks:
+  jarvis_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
+  
+  # Réseau isolé pour les services sensibles
+  jarvis_secure:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  brain_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/brain"
+  memory_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/memory"
+  # Keep ollama_data for fallback container
+  ollama_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/ollama"
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "./data/redis"
+
+services:
+  # 🧠 Brain API - Enhanced for Host Ollama + Multi-Model Support
+  brain-api:
+    build:
+      context: ./services/brain-api
+      dockerfile: Dockerfile
+    container_name: jarvis_brain
+    ports:
+      - "127.0.0.1:8080:8080"  # API principale
+      - "127.0.0.1:8081:8081"  # WebSocket
+    environment:
+      - NODE_ENV=production
+      - BRAIN_DEBUG=false
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - MEMORY_DB_URL=postgresql://${POSTGRES_USER:-jarvis}:${POSTGRES_PASSWORD}@memory-db:5432/${POSTGRES_DB:-jarvis_memory}
+      
+      # 🔄 HYBRID OLLAMA CONFIGURATION
+      - OLLAMA_MODE=hybrid
+      - OLLAMA_PRIMARY_URL=http://host.docker.internal:11434    # Host Ollama
+      - OLLAMA_FALLBACK_URL=http://ollama-fallback:11434        # Container Ollama
+      - OLLAMA_CLOUD_URL=${OPENROUTER_URL:-}                    # Future cloud fallback
+      
+      # 🤖 MULTI-MODEL CONFIGURATION
+      - LLM_ROUTING_ENABLED=true
+      - PRIMARY_MODEL=llama3.2:3b                              # Host model
+      - LARGE_MODEL=gpt-oss-20b                                # Host large model
+      - FALLBACK_MODEL=llama3.2:3b                             # Container model
+      - MODEL_SELECTION_STRATEGY=complexity_based              # auto, complexity_based, round_robin
+      
+      # 🔐 Security & Performance
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS_DEV:-http://localhost:3000,http://127.0.0.1:3000}
+      - DB_POOL_SIZE=20
+      - DB_MAX_OVERFLOW=30
+      - REDIS_POOL_SIZE=50
+      - ENABLE_CIRCUIT_BREAKERS=true
+      - ENABLE_LLM_CACHE=true
+      - HOST_NETWORK_TIMEOUT=30
+      - LLM_FAILOVER_TIMEOUT=10
+      
+    extra_hosts:
+      # Enable Docker to Host communication
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - brain_data:/app/data:rw
+      - ./logs:/app/logs:rw
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.10
+      jarvis_secure:
+        ipv4_address: 172.21.0.10
+    depends_on:
+      redis:
+        condition: service_healthy
+      memory-db:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "--max-time", "5"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # 🚪 LLM Gateway - New Service for Multi-Model Orchestration
+  llm-gateway:
+    build:
+      context: ./services/llm-gateway
+      dockerfile: Dockerfile
+    container_name: jarvis_llm_gateway
+    ports:
+      - "127.0.0.1:5010:5010"
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Host Ollama Configuration
+      - HOST_OLLAMA_URL=http://host.docker.internal:11434
+      - HOST_OLLAMA_MODELS=llama3.2:3b,gpt-oss-20b
+      - HOST_OLLAMA_TIMEOUT=30
+      - HOST_OLLAMA_MAX_RETRIES=3
+      
+      # Fallback Ollama Configuration
+      - FALLBACK_OLLAMA_URL=http://ollama-fallback:11434
+      - FALLBACK_OLLAMA_MODELS=llama3.2:3b
+      - FALLBACK_OLLAMA_TIMEOUT=15
+      
+      # Load Balancing Strategy
+      - ROUTING_STRATEGY=complexity_based
+      - COMPLEXITY_THRESHOLD_LARGE=0.7
+      - FALLBACK_ON_ERROR=true
+      - CACHE_RESPONSES=true
+      - CACHE_TTL_SECONDS=300
+      
+      # Security
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - RATE_LIMIT_PER_MINUTE=60
+      - ALLOWED_INTERNAL_IPS=172.20.0.0/16,172.21.0.0/16
+      
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./services/llm-gateway/cache:/app/cache:rw
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.140
+      jarvis_secure:
+        ipv4_address: 172.21.0.140
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5010/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # 🤖 Ollama Fallback - Keep container as backup
+  ollama-fallback:
+    image: ollama/ollama:latest
+    container_name: jarvis_ollama_fallback
+    expose:
+      - "11434"
+    volumes:
+      - ${OLLAMA_DATA_PATH:-./data/ollama}:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_MODELS=/root/.ollama/models
+      - OLLAMA_MAX_LOADED_MODELS=1  # Resource constraint for fallback
+    networks:
+      jarvis_network:
+        ipv4_address: 172.20.0.40
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G     # Reduced from 4G
+          cpus: '1.0'    # Reduced from 2.0
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 45s
+
+  # 🔍 Network Monitor - Monitor Host/Container connectivity
+  network-monitor:
+    build:
+      context: ./services/network-monitor
+      dockerfile: Dockerfile
+    container_name: jarvis_network_monitor
+    expose:
+      - "5011"
+    environment:
+      - MONITOR_INTERVAL=30
+      - HOST_OLLAMA_URL=http://host.docker.internal:11434
+      - FALLBACK_OLLAMA_URL=http://ollama-fallback:11434
+      - ALERT_THRESHOLD_FAILURES=3
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./logs:/app/logs:rw
+    networks:
+      jarvis_secure:
+        ipv4_address: 172.21.0.150
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5011/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+
+  # Continue with other services unchanged...
+  # (Copy remaining services from original docker-compose.yml)
+  
+  # 🧮 Redis Cache & Session
+  redis:
+    image: redis:7-alpine
+    container_name: jarvis_redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-256mb} --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-allkeys-lru} --requirepass ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - ${REDIS_DATA_PATH:-./data/redis}:/data
+    networks:
+      jarvis_secure:
+        ipv4_address: 172.21.0.50
+    restart: unless-stopped
+    user: "999:999"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 🗄️ Memory Database - PostgreSQL + pgvector
+  memory-db:
+    image: pgvector/pgvector:pg16
+    container_name: jarvis_memory_db
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-jarvis_memory}
+      - POSTGRES_USER=${POSTGRES_USER:-jarvis}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=${POSTGRES_INITDB_ARGS:---encoding=UTF-8}
+      - PGUSER=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./services/memory-db/init:/docker-entrypoint-initdb.d
+    networks:
+      jarvis_secure:
+        ipv4_address: 172.21.0.60
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jarvis} -d ${POSTGRES_DB:-jarvis_memory}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

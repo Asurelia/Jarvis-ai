@@ -24,8 +24,8 @@ class TestDockerServices:
         return {
             "brain-api": {
                 "container": "jarvis_brain",
-                "health_url": "http://localhost:5000/health",
-                "ports": [5000, 5001],
+                "health_url": "http://localhost:8080/health",
+                "ports": [8080, 8081],
                 "wait_time": 30
             },
             "tts-service": {
@@ -118,7 +118,7 @@ class TestDockerServices:
         # Test Brain API -> Ollama
         try:
             response = requests.post(
-                "http://localhost:5000/api/chat",
+                "http://localhost:8080/api/chat",
                 json={"message": "Test inter-service"},
                 timeout=10
             )

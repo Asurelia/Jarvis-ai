@@ -11,6 +11,8 @@ import logging
 from dataclasses import dataclass, asdict
 from enum import Enum
 
+from .llm_manager import LLMManager, ModelSelectionStrategy
+
 logger = logging.getLogger(__name__)
 
 class AgentState(Enum):
@@ -55,8 +57,10 @@ class ReactAgent:
     Implémente le pattern Think → Act → Observe
     """
     
-    def __init__(self, llm_url: str, memory_manager=None, metacognition=None, persona_manager=None):
+    def __init__(self, llm_url: str, memory_manager=None, metacognition=None, persona_manager=None, llm_gateway_url: str = None):
         self.llm_url = llm_url
+        self.llm_gateway_url = llm_gateway_url or "http://llm-gateway:5010"
+        self.use_gateway = True  # Activer le gateway par défaut
         self.memory_manager = memory_manager
         self.metacognition = metacognition
         self.persona_manager = persona_manager
@@ -74,6 +78,9 @@ class ReactAgent:
         self.tools = {}
         self.tool_descriptions = {}
         
+        # LLM Manager pour routing intelligent
+        self.llm_manager = None
+        
         # Statistiques
         self.stats = {
             "total_executions": 0,
@@ -90,13 +97,21 @@ class ReactAgent:
         """Initialisation asynchrone de l'agent"""
         logger.info("🚀 Initialisation React Agent...")
         
+        # Initialiser LLM Manager
+        self.llm_manager = LLMManager(
+            gateway_url=self.llm_gateway_url,
+            fallback_url=self.llm_url,
+            strategy=ModelSelectionStrategy.COMPLEXITY_BASED
+        )
+        await self.llm_manager.initialize()
+        
         # Charger les outils disponibles
         await self._load_tools()
         
-        # Tester connexion LLM
+        # Tester connexion LLM via manager
         await self._test_llm_connection()
         
-        logger.info(f"✅ React Agent prêt avec {len(self.tools)} outils")
+        logger.info(f"✅ React Agent prêt avec {len(self.tools)} outils et LLM Gateway")
     
     async def shutdown(self):
         """Arrêt propre de l'agent"""
@@ -106,6 +121,10 @@ class ReactAgent:
             logger.warning("Arrêt forcé pendant une exécution")
             if self.current_execution:
                 self.current_execution.status = AgentState.ERROR
+        
+        # Arrêt LLM Manager
+        if self.llm_manager:
+            await self.llm_manager.shutdown()
         
         self._log_final_stats()
     

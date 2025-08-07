@@ -22,7 +22,7 @@ from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 import time
-from prometheus_client import make_asgi_app
+# Prometheus import handled in monitoring module
 
 # Import modules internes
 from core.metacognition import MetacognitionEngine
@@ -414,8 +414,13 @@ if "shutdown_manager" in app_state and app_state["shutdown_manager"]:
     app.add_middleware(ShutdownMiddleware, shutdown_manager=app_state["shutdown_manager"])
 
 # 📊 Métriques Prometheus
-metrics_app = make_asgi_app()
-app.mount("/metrics", metrics_app)
+try:
+    from utils.monitoring import make_asgi_app
+    metrics_app = make_asgi_app()
+    app.mount("/metrics", metrics_app)
+    logger.info("📊 Endpoint /metrics configuré")
+except Exception as e:
+    logger.warning(f"⚠️ Impossible de configurer /metrics: {e}")
 
 # 🛣️ Routes API
 app.include_router(health.router, prefix="/health", tags=["Health"])

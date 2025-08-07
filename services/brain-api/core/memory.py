@@ -37,7 +37,7 @@ class MemoryEntry:
     type: str  # static, dynamic, episodic
     content: str
     embedding: Optional[List[float]]
-    metadata: Dict[str, Any]
+    meta_data: Dict[str, Any]
     created_at: datetime
     updated_at: datetime
     access_count: int = 0
@@ -70,7 +70,7 @@ class MemoryEntryModel(Base):
     type: Mapped[str] = mapped_column(String, nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[List[float]] = mapped_column(JSON, nullable=True)
-    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    meta_data: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     access_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -79,7 +79,7 @@ class MemoryEntryModel(Base):
     
     # Indexes for performance
     __table_args__ = (
-        Index('idx_memory_user_type', 'metadata', 'type'),
+        Index('idx_memory_user_type', 'meta_data', 'type'),
         Index('idx_memory_created', 'created_at'),
         Index('idx_memory_relevance', 'relevance_score'),
     )
@@ -319,10 +319,10 @@ class HybridMemoryManager:
         try:
             async with self.db_session_factory() as session:
                 query = text("""
-                    SELECT DISTINCT metadata->>'user_id' as user_id
+                    SELECT DISTINCT meta_data->>'user_id' as user_id
                     FROM memory_entries 
                     WHERE created_at >= NOW() - INTERVAL ':days days'
-                    AND metadata->>'user_id' IS NOT NULL
+                    AND meta_data->>'user_id' IS NOT NULL
                     LIMIT 100
                 """)
                 result = await session.execute(query, {"days": days})
@@ -351,7 +351,7 @@ class HybridMemoryManager:
             type="static",
             content=content,
             embedding=await self._generate_embedding(content),
-            metadata={
+            meta_data={
                 "user_id": user_id,
                 "key": key,
                 **(metadata or {})
@@ -368,7 +368,7 @@ class HybridMemoryManager:
                     type="static",
                     content=content,
                     embedding=entry.embedding,
-                    metadata=entry.metadata,
+                    meta_data=entry.meta_data,
                     created_at=entry.created_at,
                     updated_at=entry.updated_at,
                     access_count=entry.access_count,
@@ -420,7 +420,7 @@ class HybridMemoryManager:
             type="dynamic",
             content=content,
             embedding=await self._generate_embedding(content),
-            metadata={
+            meta_data={
                 "user_id": user_id,
                 "interaction_count": self.interaction_count,
                 "context": context or {},
@@ -463,7 +463,7 @@ class HybridMemoryManager:
             type="episodic",
             content=episode_content,
             embedding=await self._generate_embedding(episode_content),
-            metadata={
+            meta_data={
                 "user_id": user_id,
                 "event": event,
                 "result": result,
@@ -509,15 +509,15 @@ class HybridMemoryManager:
         
         if "static" in memory_types:
             candidates.extend([entry for entry in self.static_memory.values() 
-                             if entry.metadata.get("user_id") == user_id])
+                             if entry.meta_data.get("user_id") == user_id])
         
         if "dynamic" in memory_types:
             candidates.extend([entry for entry in self.dynamic_memory.values() 
-                             if entry.metadata.get("user_id") == user_id])
+                             if entry.meta_data.get("user_id") == user_id])
         
         if "episodic" in memory_types:
             candidates.extend([entry for entry in self.episodic_memory 
-                             if entry.metadata.get("user_id") == user_id])
+                             if entry.meta_data.get("user_id") == user_id])
         
         # Calculer la similarité et trier
         scored_memories = []
@@ -773,13 +773,13 @@ class HybridMemoryManager:
         
         # Analyser les 5 dernières interactions
         recent_episodes = [entry for entry in list(self.episodic_memory)[-5:] 
-                          if entry.metadata.get("user_id") == user_id]
+                          if entry.meta_data.get("user_id") == user_id]
         
         if len(recent_episodes) >= 3:  # Minimum pour détecter une évolution
             # Extraire les thèmes dominants
             themes = []
             for episode in recent_episodes:
-                event = episode.metadata.get("event", "")
+                event = episode.meta_data.get("event", "")
                 themes.extend(self._extract_interests_from_query(event))
             
             if themes:
@@ -802,7 +802,7 @@ class HybridMemoryManager:
     async def _cleanup_dynamic_memory(self, user_id: str, max_entries: int = 10):
         """Nettoyer la mémoire dynamique pour éviter surcharge"""
         user_dynamic_memories = [entry for entry in self.dynamic_memory.values() 
-                                if entry.metadata.get("user_id") == user_id]
+                                if entry.meta_data.get("user_id") == user_id]
         
         if len(user_dynamic_memories) > max_entries:
             # Trier par date et garder les plus récentes
@@ -819,7 +819,7 @@ class HybridMemoryManager:
         """Analyser les patterns des interactions récentes"""
         
         recent_episodes = [entry for entry in list(self.episodic_memory)[-10:] 
-                          if entry.metadata.get("user_id") == user_id]
+                          if entry.meta_data.get("user_id") == user_id]
         
         patterns = {
             "interaction_frequency": len(recent_episodes),
@@ -832,7 +832,7 @@ class HybridMemoryManager:
             # Analyser les thèmes communs
             all_themes = []
             for episode in recent_episodes:
-                event = episode.metadata.get("event", "")
+                event = episode.meta_data.get("event", "")
                 all_themes.extend(self._extract_interests_from_query(event))
             
             theme_counts = defaultdict(int)
@@ -983,10 +983,10 @@ class HybridMemoryManager:
                 # Requête optimisée avec similarité vectorielle si disponible
                 placeholders = ','.join([f"'{t}'" for t in memory_types])
                 query = text(f"""
-                    SELECT id, type, content, embedding, metadata, created_at, updated_at, 
+                    SELECT id, type, content, embedding, meta_data, created_at, updated_at, 
                            access_count, last_accessed, relevance_score
                     FROM memory_entries 
-                    WHERE metadata->>'user_id' = :user_id 
+                    WHERE meta_data->>'user_id' = :user_id 
                     AND type IN ({placeholders})
                     AND embedding IS NOT NULL
                     ORDER BY 
@@ -1006,7 +1006,7 @@ class HybridMemoryManager:
                         type=row[1],
                         content=row[2],
                         embedding=row[3],
-                        metadata=row[4],
+                        meta_data=row[4],
                         created_at=row[5],
                         updated_at=row[6],
                         access_count=row[7],

@@ -51,12 +51,9 @@ volumes:
       type: none
       o: bind
       device: "./data/redis"
+  # Named Docker volume for PostgreSQL data persistence (Windows-compatible)
   postgres_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: "./data/postgres"
 
 services:
   # 🧠 Brain API - Cerveau central M.A.MM Optimisé
@@ -66,8 +63,8 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis_brain
     ports:
-      - "127.0.0.1:5000:5000"  # API principale
-      - "127.0.0.1:5001:5001"  # WebSocket
+      - "127.0.0.1:8080:8080"  # API principale
+      - "127.0.0.1:8081:8081"  # WebSocket
     environment:
       - NODE_ENV=production
       - BRAIN_DEBUG=false
@@ -120,7 +117,7 @@ services:
     read_only: false
     user: "1000:1000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health", "--max-time", "5"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "--max-time", "5"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -284,14 +281,17 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-jarvis}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_INITDB_ARGS=${POSTGRES_INITDB_ARGS:---encoding=UTF-8}
+      # Set proper ownership for PostgreSQL
+      - PGUSER=postgres
     volumes:
-      - ${MEMORY_DATA_PATH:-./data/memory}:/var/lib/postgresql/data
+      # Use named Docker volume for data persistence (Windows-compatible)
+      - postgres_data:/var/lib/postgresql/data
       - ./services/memory-db/init:/docker-entrypoint-initdb.d
     networks:
       jarvis_secure:
         ipv4_address: 172.21.0.60
     restart: unless-stopped
-    user: "999:999"
+    # Remove user specification to let PostgreSQL handle its own user management
     deploy:
       resources:
         limits:
@@ -307,78 +307,91 @@ services:
       interval: ${HEALTH_CHECK_INTERVAL:-30s}
       timeout: ${HEALTH_CHECK_TIMEOUT:-10s}
       retries: ${HEALTH_CHECK_RETRIES:-3}
+      start_period: 40s
 
-  # 🖥️ System Control Service - Contrôle clavier/souris sécurisé
+  # 🖥️ System Control Service - Contrôle clavier/souris sécurisé (INTERNAL ONLY)
   system-control:
     build:
       context: ./services/system-control
       dockerfile: Dockerfile
     container_name: jarvis_system_control
-    ports:
-      - "5004:5004"
+    expose:
+      - "5004"
     environment:
       - SANDBOX_MODE=${SANDBOX_MODE:-true}
       - MAX_ACTIONS_PER_MINUTE=${MAX_ACTIONS_PER_MINUTE:-60}
       - DISPLAY=${DISPLAY:-:99}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REQUIRED=true
       - SYSTEM_CONTROL_ADMIN_USER=${SYSTEM_CONTROL_ADMIN_USER:-admin}
       - SYSTEM_CONTROL_ADMIN_PASSWORD=${SYSTEM_CONTROL_ADMIN_PASSWORD}
       - SYSTEM_CONTROL_JARVIS_USER=${SYSTEM_CONTROL_JARVIS_USER:-jarvis}
       - SYSTEM_CONTROL_JARVIS_PASSWORD=${SYSTEM_CONTROL_JARVIS_PASSWORD}
+      - ALLOWED_INTERNAL_IPS=172.20.0.0/16,172.21.0.0/16
     volumes:
       - ./logs:/app/logs
       - ./services/system-control/cache:/app/cache
     networks:
-      jarvis_network:
-        ipv4_address: 172.20.0.80
+      jarvis_secure:
+        ipv4_address: 172.21.0.80
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    # Privilèges requis pour contrôle système (utiliser avec précaution)
+    # Security hardening - removed dangerous privileges
     privileged: false
-    cap_add:
-      - SYS_PTRACE
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
 
-  # 💻 Terminal Service - Sessions terminal intelligentes
+  # 💻 Terminal Service - Sessions terminal intelligentes (INTERNAL ONLY)
   terminal-service:
     build:
       context: ./services/terminal-service
       dockerfile: Dockerfile
     container_name: jarvis_terminal
-    ports:
-      - "5005:5005"
+    expose:
+      - "5005"
     environment:
       - MAX_TERMINAL_SESSIONS=10
       - SESSION_TIMEOUT_MINUTES=30
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REQUIRED=true
+      - ALLOWED_INTERNAL_IPS=172.20.0.0/16,172.21.0.0/16
     volumes:
       - ./logs:/app/logs
       - ./services/terminal-service/cache:/app/cache
     networks:
-      jarvis_network:
-        ipv4_address: 172.20.0.90
+      jarvis_secure:
+        ipv4_address: 172.21.0.90
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5005/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # 🔧 MCP Gateway - Model Context Protocol pour IDE
+  # 🔧 MCP Gateway - Model Context Protocol pour IDE (INTERNAL ONLY)
   mcp-gateway:
     build:
       context: ./services/mcp-gateway
       dockerfile: Dockerfile
     container_name: jarvis_mcp_gateway
-    ports:
-      - "5006:5006"
+    expose:
+      - "5006"
     environment:
       - PYTHONPATH=/app
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REQUIRED=true
+      - ALLOWED_INTERNAL_IPS=172.20.0.0/16,172.21.0.0/16
     networks:
-      jarvis_network:
-        ipv4_address: 172.20.0.100
+      jarvis_secure:
+        ipv4_address: 172.21.0.100
     depends_on:
       - brain-api
       - system-control
@@ -386,33 +399,42 @@ services:
       - tts-service
       - stt-service
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5006/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # 🧠 Global Autocomplete Service - Autocomplétion intelligente
+  # 🧠 Global Autocomplete Service - Autocomplétion intelligente (INTERNAL ONLY)
   autocomplete-service:
     build:
       context: ./services/autocomplete-service
       dockerfile: Dockerfile
     container_name: jarvis_autocomplete
-    ports:
-      - "5007:5007"
+    expose:
+      - "5007"
     environment:
       - LEARNING_ENABLED=true
       - CONTEXT_HISTORY_SIZE=1000
       - SUGGESTION_LIMIT=10
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REQUIRED=true
+      - ALLOWED_INTERNAL_IPS=172.20.0.0/16,172.21.0.0/16
     volumes:
       - ./services/autocomplete-service/cache:/app/cache
     networks:
-      jarvis_network:
-        ipv4_address: 172.20.0.110
+      jarvis_secure:
+        ipv4_address: 172.21.0.110
     depends_on:
       - brain-api
       - mcp-gateway
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5007/health"]
       interval: 30s

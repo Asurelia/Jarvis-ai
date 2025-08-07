@@ -1,0 +1,418 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "🚀 JARVIS AI - GPT-OSS 20B Performance Dashboard",
+    "tags": ["jarvis", "llm", "performance", "gpt-oss-20b"],
+    "style": "dark",
+    "timezone": "browser",
+    "editable": true,
+    "hideControls": false,
+    "graphTooltip": 1,
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m"],
+      "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "model",
+          "type": "custom",
+          "query": "llama3.2:3b,gpt-oss-20b",
+          "multi": true,
+          "includeAll": true,
+          "allValue": null
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "🎯 Response Time Overview",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "avg(ollama_request_duration_seconds{model=~\"$model\"})",
+            "legendFormat": "Avg Response Time"
+          },
+          {
+            "expr": "histogram_quantile(0.95, ollama_request_duration_seconds_bucket{model=~\"$model\"})",
+            "legendFormat": "P95 Response Time"
+          },
+          {
+            "expr": "histogram_quantile(0.99, ollama_request_duration_seconds_bucket{model=~\"$model\"})",
+            "legendFormat": "P99 Response Time"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 2},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "🚀 Throughput (Tokens/Second)",
+        "type": "stat", 
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "avg(rate(ollama_tokens_generated_total{model=~\"$model\"}[5m]))",
+            "legendFormat": "Avg Tokens/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "tps",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 10},
+                {"color": "green", "value": 25}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "📈 Response Time Trends by Model",
+        "type": "timeseries",
+        "gridPos": {"h": 9, "w": 24, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "avg by (model) (ollama_request_duration_seconds{model=~\"$model\"})",
+            "legendFormat": "{{model}} - Avg"
+          },
+          {
+            "expr": "histogram_quantile(0.95, ollama_request_duration_seconds_bucket{model=~\"$model\"})",
+            "legendFormat": "{{model}} - P95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "fillOpacity": 10
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "🎮 GPU Memory Usage",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 17},
+        "targets": [
+          {
+            "expr": "gpu_memory_usage_bytes / gpu_memory_total_bytes * 100",
+            "legendFormat": "GPU Memory %"
+          },
+          {
+            "expr": "gpu_memory_usage_bytes / 1024 / 1024 / 1024",
+            "legendFormat": "GPU Memory GB"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": ".*%"},
+              "properties": [
+                {"id": "unit", "value": "percent"},
+                {"id": "max", "value": 100},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 85},
+                    {"color": "red", "value": 95}
+                  ]
+                }}
+              ]
+            },
+            {
+              "matcher": {"id": "byRegexp", "options": ".*GB"},
+              "properties": [
+                {"id": "unit", "value": "bytes"},
+                {"id": "max", "value": 17179869184}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "title": "⚡ GPU Utilization",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 17},
+        "targets": [
+          {
+            "expr": "gpu_utilization_percent",
+            "legendFormat": "GPU Utilization"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 80}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "📊 Model Usage Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
+        "targets": [
+          {
+            "expr": "sum by (model) (increase(ollama_requests_total{model=~\"$model\"}[1h]))",
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "options": {
+          "pieType": "pie",
+          "displayLabels": ["name", "percent"],
+          "legend": {
+            "displayMode": "visible",
+            "placement": "right"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "🔄 Request Queue Length",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 25},
+        "targets": [
+          {
+            "expr": "ollama_queue_length",
+            "legendFormat": "Queue Length"
+          },
+          {
+            "expr": "ollama_active_requests",
+            "legendFormat": "Active Requests"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "stepAfter",
+              "fillOpacity": 20
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "🌐 Network Latency (Docker ↔ Host)",
+        "type": "timeseries", 
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 33},
+        "targets": [
+          {
+            "expr": "avg(container_to_host_latency_ms)",
+            "legendFormat": "Container → Host Latency"
+          },
+          {
+            "expr": "avg(llm_gateway_routing_latency_ms)",
+            "legendFormat": "LLM Gateway Routing"
+          },
+          {
+            "expr": "avg(model_switch_latency_ms)",
+            "legendFormat": "Model Switch Time"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1000},
+                {"color": "red", "value": 2000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "💰 Performance Efficiency (Value/Cost)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 41},
+        "targets": [
+          {
+            "expr": "(avg(ollama_response_quality_score) * 100) / avg(ollama_request_duration_seconds)",
+            "legendFormat": "Quality/Time Ratio"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "🔥 Cache Hit Rate",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 41},
+        "targets": [
+          {
+            "expr": "rate(cache_hits_total[5m]) / rate(cache_requests_total[5m]) * 100",
+            "legendFormat": "Cache Hit Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 60},
+                {"color": "green", "value": 80}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "⚠️ Error Rate",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 41},
+        "targets": [
+          {
+            "expr": "rate(ollama_errors_total[5m]) / rate(ollama_requests_total[5m]) * 100",
+            "legendFormat": "Error Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "🔧 System Resources Overview",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 47},
+        "targets": [
+          {
+            "expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU Usage %"
+          },
+          {
+            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "legendFormat": "Memory Usage %"
+          },
+          {
+            "expr": "gpu_temperature_celsius",
+            "legendFormat": "GPU Temperature °C"
+          },
+          {
+            "expr": "gpu_power_draw_watts",
+            "legendFormat": "GPU Power Draw W"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": ".*%"},
+              "properties": [
+                {"id": "unit", "value": "percent"},
+                {"id": "max", "value": 100}
+              ]
+            },
+            {
+              "matcher": {"id": "byRegexp", "options": ".*°C"},
+              "properties": [
+                {"id": "unit", "value": "celsius"},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 75},
+                    {"color": "red", "value": 85}
+                  ]
+                }}
+              ]
+            },
+            {
+              "matcher": {"id": "byRegexp", "options": ".*W"},
+              "properties": [
+                {"id": "unit", "value": "watt"}
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "Model Deployments",
+          "enable": true,
+          "iconColor": "blue",
+          "type": "dashboard",
+          "builtIn": 1,
+          "hide": false
+        },
+        {
+          "name": "Performance Alerts",
+          "enable": true,
+          "iconColor": "red",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "refresh": "10s",
+    "version": 1
+  }
+}

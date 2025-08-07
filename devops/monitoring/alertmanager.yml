@@ -1,0 +1,339 @@
+# JARVIS AI - Alertmanager Configuration
+# Production alerting with intelligent routing and escalation
+
+global:
+  # The smarthost and SMTP sender used for mail notifications.
+  smtp_smarthost: '${SMTP_HOST}:587'
+  smtp_from: 'jarvis-alerts@yourdomain.com'
+  smtp_auth_username: '${SMTP_USERNAME}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
+
+  # Slack webhook URL
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  
+  # PagerDuty integration key
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# The directory from which notification templates are read.
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# The root route on which each incoming alert enters.
+route:
+  # The labels by which incoming alerts are grouped together.
+  group_by: ['alertname', 'cluster', 'service']
+  
+  # When a new group of alerts is created by an incoming alert, wait at
+  # least 'group_wait' to send the initial notification.
+  group_wait: 30s
+  
+  # When the first notification was sent, wait 'group_interval' to send a batch
+  # of new alerts that started firing for that group.
+  group_interval: 5m
+  
+  # If an alert has successfully been sent, wait 'repeat_interval' to
+  # resend them.
+  repeat_interval: 4h
+  
+  # A default receiver
+  receiver: 'default'
+  
+  # All the above attributes are inherited by all child routes and can
+  # overwritten on each.
+  routes:
+    # Critical alerts go to PagerDuty and Slack immediately
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 30m
+      routes:
+        # Database issues get special handling
+        - match:
+            service: postgresql
+          receiver: 'database-team'
+        - match:
+            service: redis
+          receiver: 'database-team'
+        
+        # Ollama/LLM issues
+        - match:
+            service: ollama
+          receiver: 'ai-team'
+        - match:
+            service: brain-api
+          receiver: 'ai-team'
+        
+        # System issues
+        - match:
+            service: system
+          receiver: 'infrastructure-team'
+    
+    # Warning alerts go to Slack with longer intervals
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 2m
+      group_interval: 10m
+      repeat_interval: 2h
+    
+    # Security alerts get immediate attention
+    - match:
+        service: security
+      receiver: 'security-team'
+      group_wait: 5s
+      group_interval: 30s
+      repeat_interval: 15m
+    
+    # Deployment alerts during business hours
+    - match:
+        service: deployment
+      receiver: 'devops-team'
+      active_time_intervals:
+        - business-hours
+    
+    # GPU alerts for performance monitoring
+    - match:
+        service: gpu
+      receiver: 'performance-team'
+      group_interval: 15m
+    
+    # Business logic alerts
+    - match:
+        service: conversation
+      receiver: 'product-team'
+    - match:
+        service: model
+      receiver: 'ai-team'
+
+# Inhibition rules allow to mute a set of alerts given that another alert is firing.
+inhibit_rules:
+  # Mute any warning-level notifications if the same alert is already critical.
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'instance']
+  
+  # Mute instance-level alerts if entire service is down
+  - source_matchers:
+      - alertname="ServiceDown"
+    target_matchers:
+      - service="system"
+    equal: ['instance']
+
+# Time intervals
+time_intervals:
+  - name: business-hours
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '17:00'
+        weekdays: ['monday:friday']
+        location: 'America/New_York'
+  
+  - name: out-of-hours
+    time_intervals:
+      - times:
+          - start_time: '17:00'
+            end_time: '09:00'
+        weekdays: ['monday:friday']
+        location: 'America/New_York'
+      - weekdays: ['saturday', 'sunday']
+        location: 'America/New_York'
+
+receivers:
+  # Default receiver
+  - name: 'default'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-alerts'
+        title: 'JARVIS Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Details:*
+          {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+          {{ end }}
+          {{ end }}
+        send_resolved: true
+
+  # Critical alerts - PagerDuty + Slack + Email
+  - name: 'critical-alerts'
+    pagerduty_configs:
+      - routing_key: '${PAGERDUTY_INTEGRATION_KEY}'
+        description: 'JARVIS Critical Alert: {{ .GroupLabels.alertname }}'
+        details:
+          summary: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+          environment: 'production'
+          service: '{{ .GroupLabels.service }}'
+          runbook_url: '{{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}'
+    
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-critical'
+        color: 'danger'
+        title: '🚨 CRITICAL ALERT'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          *Environment:* {{ .Labels.environment }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+        actions:
+          - type: button
+            text: 'Acknowledge'
+            url: 'https://jarvis-ops.yourdomain.com/alerts/ack/{{ .GroupKey }}'
+          - type: button
+            text: 'Silence'
+            url: 'https://jarvis-ops.yourdomain.com/alerts/silence/{{ .GroupKey }}'
+        send_resolved: true
+    
+    email_configs:
+      - to: 'oncall@yourdomain.com'
+        subject: '🚨 JARVIS Critical Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Critical Alert in JARVIS Production</h2>
+          {{ range .Alerts }}
+          <p><strong>Alert:</strong> {{ .Annotations.summary }}</p>
+          <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Service:</strong> {{ .Labels.service }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}</p>
+          {{ if .Annotations.runbook_url }}
+          <p><strong>Runbook:</strong> <a href="{{ .Annotations.runbook_url }}">{{ .Annotations.runbook_url }}</a></p>
+          {{ end }}
+          <hr>
+          {{ end }}
+
+  # Warning alerts - Slack only
+  - name: 'warning-alerts'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-warnings'
+        color: 'warning'
+        title: '⚠️ WARNING'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          {{ end }}
+        send_resolved: true
+
+  # Database team alerts
+  - name: 'database-team'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-database'
+        color: 'danger'
+        title: '🗄️ DATABASE ALERT'
+        text: |
+          {{ range .Alerts }}
+          *Database Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          {{ end }}
+        send_resolved: true
+    
+    email_configs:
+      - to: 'database-team@yourdomain.com'
+        subject: 'JARVIS Database Alert: {{ .GroupLabels.alertname }}'
+
+  # AI/ML team alerts
+  - name: 'ai-team'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-ai-ml'
+        color: 'danger'
+        title: '🤖 AI/ML ALERT'
+        text: |
+          {{ range .Alerts }}
+          *AI/ML Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          {{ if eq .Labels.service "ollama" }}
+          *Model:* {{ .Labels.model | default "unknown" }}
+          {{ end }}
+          {{ end }}
+        send_resolved: true
+
+  # Infrastructure team alerts
+  - name: 'infrastructure-team'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-infrastructure'
+        color: 'danger'
+        title: '🏗️ INFRASTRUCTURE ALERT'
+        text: |
+          {{ range .Alerts }}
+          *Infrastructure Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Instance:* {{ .Labels.instance }}
+          {{ end }}
+        send_resolved: true
+
+  # Security team alerts
+  - name: 'security-team'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-security'
+        color: 'danger'
+        title: '🔒 SECURITY ALERT'
+        text: |
+          {{ range .Alerts }}
+          *Security Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *IMMEDIATE ACTION REQUIRED*
+          {{ end }}
+        send_resolved: true
+    
+    email_configs:
+      - to: 'security@yourdomain.com'
+        subject: '🚨 JARVIS Security Alert: {{ .GroupLabels.alertname }}'
+
+  # DevOps team alerts
+  - name: 'devops-team'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-devops'
+        title: '🚀 DEPLOYMENT ALERT'
+        text: |
+          {{ range .Alerts }}
+          *Deployment Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+  # Performance team alerts
+  - name: 'performance-team'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-performance'
+        color: 'warning'
+        title: '📊 PERFORMANCE ALERT'
+        text: |
+          {{ range .Alerts }}
+          *Performance Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *GPU:* {{ .Labels.gpu_id | default "unknown" }}
+          {{ end }}
+        send_resolved: true
+
+  # Product team alerts
+  - name: 'product-team'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#jarvis-product'
+        color: 'warning'
+        title: '💼 BUSINESS ALERT'
+        text: |
+          {{ range .Alerts }}
+          *Business Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true

@@ -1,0 +1,250 @@
+# 🚀 JARVIS Hybrid Ollama - Configuration de Performance Optimisée
+# Optimisations spécifiques pour l'architecture Host + Container
+
+# Configuration Ollama Host (Windows)
+ollama_host_config:
+  # Variables d'environnement Windows
+  environment_variables:
+    OLLAMA_HOST: "0.0.0.0"
+    OLLAMA_ORIGINS: "http://localhost:*,http://127.0.0.1:*,http://172.20.0.0/16"
+    OLLAMA_MAX_LOADED_MODELS: "2"  # llama3.2:3b + gpt-oss-20b
+    OLLAMA_MAX_QUEUE: "100"
+    OLLAMA_NUM_PARALLEL: "2"
+    OLLAMA_FLASH_ATTENTION: "true"  # GPU acceleration
+    OLLAMA_GPU_OVERHEAD: "0.9"     # 90% GPU utilization
+    
+  # Configuration GPU AMD RX 7800 XT
+  gpu_settings:
+    compute_units: 60
+    memory_gb: 16
+    rocm_version: "5.7"
+    optimization_flags:
+      - "--enable-rocm"
+      - "--gpu-memory-utilization=0.85"
+      - "--tensor-parallel-size=1"
+      
+  # Modèles optimisés
+  models:
+    primary:
+      name: "llama3.2:3b"
+      quantization: "Q4_K_M"  # Optimal quality/speed balance
+      context_length: 4096
+      batch_size: 512
+      
+    large:
+      name: "gpt-oss-20b"
+      quantization: "Q4_K_S"  # Smaller quant for large model
+      context_length: 8192
+      batch_size: 128
+      
+# Configuration Docker Services Optimisée
+docker_optimization:
+  # Brain API optimisations
+  brain_api:
+    resources:
+      cpu_limit: "2.0"
+      memory_limit: "2G"
+      cpu_reservation: "1.0"
+      memory_reservation: "1G"
+    
+    environment:
+      # Connection pooling optimisé
+      DB_POOL_SIZE: 25
+      DB_MAX_OVERFLOW: 40
+      DB_POOL_TIMEOUT: 30
+      DB_POOL_RECYCLE: 3600
+      
+      # Redis optimisations
+      REDIS_POOL_SIZE: 50
+      REDIS_MAX_CONNECTIONS: 100
+      REDIS_RETRY_ON_TIMEOUT: true
+      
+      # LLM optimisations
+      LLM_REQUEST_TIMEOUT: 45
+      LLM_MAX_CONCURRENT_REQUESTS: 20
+      LLM_BATCH_SIZE: 8
+      ENABLE_REQUEST_BATCHING: true
+      
+      # Cache optimisations
+      RESPONSE_CACHE_TTL: 300
+      CONTEXT_CACHE_SIZE: 1000
+      EMBEDDING_CACHE_SIZE: 10000
+      
+  # LLM Gateway optimisations
+  llm_gateway:
+    resources:
+      cpu_limit: "1.5"
+      memory_limit: "1G" 
+      cpu_reservation: "0.5"
+      memory_reservation: "512M"
+      
+    environment:
+      # Request routing optimisé
+      COMPLEXITY_ANALYSIS_TIMEOUT: 5
+      MODEL_WARM_UP_ENABLED: true
+      PREFETCH_POPULAR_MODELS: true
+      
+      # Circuit breaker
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: 5
+      CIRCUIT_BREAKER_TIMEOUT: 60
+      CIRCUIT_BREAKER_RESET_TIMEOUT: 300
+      
+      # Connection pooling
+      HTTP_POOL_CONNECTIONS: 100
+      HTTP_POOL_MAXSIZE: 200
+      HTTP_ADAPTER_MAX_RETRIES: 3
+      
+# Optimisations Réseau
+network_optimization:
+  # Docker networks configuration
+  docker_networks:
+    jarvis_network:
+      driver_opts:
+        com.docker.network.bridge.enable_icc: "true"
+        com.docker.network.bridge.enable_ip_masquerade: "true" 
+        com.docker.network.driver.mtu: "1500"
+        
+  # Host networking optimizations (Windows)
+  windows_networking:
+    tcp_window_scaling: true
+    tcp_timestamps: true
+    tcp_sack: true
+    tcp_fastopen: true
+    tcp_congestion_control: "bbr"  # If available
+    
+# Monitoring et Métriques Performance
+performance_monitoring:
+  # Métriques clés à surveiller
+  key_metrics:
+    - ollama_request_duration_seconds
+    - ollama_queue_length
+    - ollama_model_load_time_seconds
+    - docker_container_cpu_usage_percent
+    - docker_container_memory_usage_bytes
+    - network_latency_milliseconds
+    - gpu_utilization_percent
+    - gpu_memory_usage_percent
+    
+  # Alertes performance
+  performance_alerts:
+    high_latency:
+      threshold: 2.0  # seconds
+      window: "5m"
+      action: "scale_up_or_fallback"
+      
+    high_gpu_usage:
+      threshold: 95  # percent
+      window: "10m" 
+      action: "queue_management"
+      
+    memory_pressure:
+      threshold: 85  # percent
+      window: "5m"
+      action: "garbage_collect"
+
+# Scripts d'optimisation automatique
+optimization_scripts:
+  # Script de pre-warming des modèles
+  model_prewarming: |
+    #!/bin/bash
+    echo "🔥 Pre-warming Ollama models"
+    
+    # Pre-load primary model
+    curl -X POST http://localhost:11434/api/generate \
+      -d '{"model": "llama3.2:3b", "prompt": "Hello", "stream": false}' \
+      > /dev/null 2>&1
+    
+    # Pre-load large model if available
+    curl -X POST http://localhost:11434/api/generate \
+      -d '{"model": "gpt-oss-20b", "prompt": "Hello", "stream": false}' \
+      > /dev/null 2>&1
+    
+    echo "✅ Model pre-warming completed"
+    
+  # Script d'optimisation GPU
+  gpu_optimization: |
+    # PowerShell script for Windows
+    # Set GPU performance mode
+    & "C:\Program Files\AMD\RyzenMaster\bin\AMDRSServ.exe" --set-performance-mode
+    
+    # Optimize VRAM allocation
+    $env:HSA_OVERRIDE_GFX_VERSION = "10.3.0"
+    $env:ROCR_VISIBLE_DEVICES = "0"
+    
+    Write-Host "🎮 GPU optimization applied"
+    
+  # Script de monitoring en temps réel
+  realtime_monitoring: |
+    #!/bin/bash
+    echo "📊 Starting real-time performance monitoring"
+    
+    while true; do
+      # CPU usage
+      cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)
+      
+      # Memory usage  
+      mem_usage=$(free | grep Mem | awk '{printf("%.1f"), $3/$2 * 100.0}')
+      
+      # GPU usage (if rocm-smi available)
+      if command -v rocm-smi &> /dev/null; then
+        gpu_usage=$(rocm-smi --showuse | grep -o '[0-9]\+%' | head -1 | tr -d '%')
+      else
+        gpu_usage="N/A"
+      fi
+      
+      # Ollama queue length
+      queue_length=$(curl -s http://localhost:11434/api/ps | jq '.models | length')
+      
+      echo "$(date): CPU: ${cpu_usage}% | RAM: ${mem_usage}% | GPU: ${gpu_usage}% | Queue: ${queue_length}"
+      
+      sleep 5
+    done
+
+# Configuration Avancée par Environnement
+environment_configs:
+  development:
+    ollama_max_loaded_models: 1
+    docker_memory_limits_factor: 0.5
+    monitoring_interval: 30
+    cache_ttl: 60
+    
+  production:
+    ollama_max_loaded_models: 2
+    docker_memory_limits_factor: 1.0
+    monitoring_interval: 10
+    cache_ttl: 300
+    enable_gpu_optimization: true
+    enable_model_prewarming: true
+    
+  high_performance:
+    ollama_max_loaded_models: 3
+    docker_memory_limits_factor: 1.5
+    monitoring_interval: 5
+    cache_ttl: 600
+    enable_aggressive_caching: true
+    enable_request_batching: true
+    gpu_memory_fraction: 0.95
+
+# Benchmarks et Tests de Performance
+performance_benchmarks:
+  # Test de latence simple
+  latency_test:
+    endpoint: "http://localhost:5010/generate"
+    payload:
+      model: "llama3.2:3b"
+      prompt: "Hello, how are you?"
+      max_tokens: 50
+    expected_latency_ms: 500
+    
+  # Test de throughput
+  throughput_test:
+    concurrent_requests: 10
+    duration_seconds: 60
+    expected_rps: 20
+    
+  # Test de charge
+  load_test:
+    max_concurrent_users: 50
+    ramp_up_time: 30
+    duration_minutes: 10
+    success_rate_threshold: 99.5
