@@ -29,8 +29,8 @@ psutil==5.9.6
 pytest-benchmark==4.0.0
 
 # Docker et intégration
-docker==6.1.3
-docker-compose==1.29.2
+docker
+docker-compose
 
 # Tests d'UI (React/JavaScript via Node.js)
 playwright==1.40.0
@@ -47,33 +47,34 @@ prometheus-client==0.19.0
 grafana-api==1.0.3
 
 # Utils pour les tests
-pyyaml==6.0.1
+pyyaml
 jinja2==3.1.2
-click==8.1.7
-colorama==0.4.6
+click
+colorama
 tabulate==0.9.0
 rich==13.7.0
+structlog==24.1.0
 
 # Tests de sécurité
-bandit==1.7.5
-safety==2.3.5
+bandit
+safety
 
 # Linting et formatage
-black==23.11.0
-flake8==6.1.0
-mypy==1.7.1
-pylint==3.0.3
+black
+flake8
+mypy
+pylint
 
 # Tests spécifiques JARVIS
 opencv-python==4.8.1.78
-torch==2.1.1
+torch==2.2.0
 transformers==4.35.2
 whisper==1.1.10
 edge-tts==6.1.9
 ollama==0.1.7
 
 # Tests AMD GPU
-rocm-smi-lib==6.0.0
+# rocm-smi-lib==6.0.0
 pynvml==11.5.0
 
 # Documentation des tests
